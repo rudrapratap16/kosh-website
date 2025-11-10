@@ -1,30 +1,24 @@
 from flask import Flask, jsonify, request
-from config import BACKEND_PORT
 from services.bigquery_service import fetch_data, fetch_filters
+import os
 
+# Create Flask app at top level
 app = Flask(__name__)
 
 @app.route("/filters", methods=["GET"])
 def get_filters():
-    """
-    Returns unique values for dropdowns:
-    - outfall_number
-    - parameter_description
-    - statistical_base
-    - dmr_value_unit
-    """
+    """Returns unique values for dropdowns"""
     try:
         filters = fetch_filters()
         return jsonify(filters), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route("/data", methods=["GET"])
 def get_data():
     """
     Query params (all optional):
-      outfall, parameter, base, unit, start_date, end_date, limit
+    outfall, parameter, base, unit, start_date, end_date, limit
     """
     try:
         params = {
@@ -41,6 +35,11 @@ def get_data():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Optional: health check
+@app.route("/health", methods=["GET"])
+def health():
+    return "OK", 200
 
 if __name__ == "__main__":
-    app.run(port=BACKEND_PORT, debug=True, host='0.0.0.0')
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
