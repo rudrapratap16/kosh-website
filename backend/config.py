@@ -2,12 +2,10 @@ import os
 from dotenv import load_dotenv
 
 # Load .env file from project root
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 load_dotenv('.env')
 
 # BigQuery + Backend Configs
-# PROJECT_ID = os.getenv("PROJECT_ID", "koshai-475618")
-PROJECT_ID = os.getenv("PROJECT_ID", "temporaty")
+PROJECT_ID = os.getenv("PROJECT_ID", "koshai-475618")
 print(PROJECT_ID)
 DATASET = os.getenv("DATASET", "raw_data")
 TABLE = os.getenv("TABLE", "npdes_monitoring")
