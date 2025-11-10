@@ -19,4 +19,4 @@ ENV PORT 8080
 EXPOSE $PORT
 
 # Start stramlit using the PORT variable
-CMD streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
+CMD streamlit run dashboard.py --server.port=$PORT
