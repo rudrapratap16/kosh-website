@@ -6,7 +6,7 @@ CLIENT = bigquery.Client(project=PROJECT_ID)
 # Fetches filters
 def fetch_filters():
     """
-    Returns a dict of unique values for the UI dropdowns.
+    Returns a dict of unique values for the UI dropdowns of the ui.
     """
     table_ref = f"{PROJECT_ID}.{DATASET}.{TABLE}"
 
