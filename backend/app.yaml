@@ -1,0 +1,8 @@
+runtime: python311
+entrypoint: gunicorn -b :$PORT app:app
+
+env_variables:
+  PROJECT_ID: "koshai-475618"
+  DATASET: "raw_data"
+  TABLE: "npdes_monitoring"
+  BACKEND_PORT: 8080
