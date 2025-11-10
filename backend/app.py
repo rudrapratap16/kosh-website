@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-from config import PORT
+from config import BACKEND_PORT
 from services.bigquery_service import fetch_data, fetch_filters
 
 app = Flask(__name__)
@@ -43,4 +43,4 @@ def get_data():
 
 
 if __name__ == "__main__":
-    app.run(port=PORT, debug=True, host='0.0.0.0')
+    app.run(port=BACKEND_PORT, debug=True, host='0.0.0.0')
