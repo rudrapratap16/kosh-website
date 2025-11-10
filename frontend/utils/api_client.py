@@ -4,13 +4,13 @@ import os
 
 # Load .env from project root
 BASE = os.path.dirname(os.path.dirname(__file__))
-load_dotenv(os.path.join(BASE, "..", ".env"))
+load_dotenv()
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:5000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8080")
 
 def get_filters():
     try:
-        r = requests.get(f"{BACKEND_URL}/api/filters", timeout=30)
+        r = requests.get(f"{BACKEND_URL}/filters", timeout=30)
         r.raise_for_status()
         return r.json()
     except Exception as e:
@@ -34,7 +34,7 @@ def get_data(outfall=None, parameter=None, base=None, unit=None, start_date=None
     params["limit"] = limit
 
     try:
-        r = requests.get(f"{BACKEND_URL}/api/data", params=params, timeout=60)
+        r = requests.get(f"{BACKEND_URL}/data", params=params, timeout=60)
         r.raise_for_status()
         payload = r.json()
         return payload.get("data", [])
