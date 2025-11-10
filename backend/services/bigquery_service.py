@@ -3,6 +3,7 @@ from config import PROJECT_ID, DATASET, TABLE
 
 CLIENT = bigquery.Client(project=PROJECT_ID)
 
+# Fetches filters
 def fetch_filters():
     """
     Returns a dict of unique values for the UI dropdowns.
