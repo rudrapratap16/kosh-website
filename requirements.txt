@@ -3,3 +3,4 @@ pandas
 requests
 flask
 google-cloud-bigquery
+python-dotenv
