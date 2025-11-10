@@ -16,9 +16,8 @@ COPY . .
 # Set environment variables for Flask
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
-ENV PORT=8080
 
-# Expose the port Cloud Run expects
+# Expose the default port
 EXPOSE 8080
 
 # Run the Flask app
