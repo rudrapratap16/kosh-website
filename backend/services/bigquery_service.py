@@ -118,3 +118,103 @@ def fetch_data(params):
         })
 
     return rows
+
+def fetch_weather_filters():
+    """
+    Returns unique values for dropdowns in the precipitation_weather table.
+    """
+    table_ref = f"{PROJECT_ID}.{DATASET}.precipitation_weather"
+
+    queries = {
+        "station_ids": f"SELECT DISTINCT station_id FROM `{table_ref}` WHERE station_id IS NOT NULL ORDER BY station_id",
+        "parent_facility_ids": f"SELECT DISTINCT parent_facility_id FROM `{table_ref}` WHERE parent_facility_id IS NOT NULL ORDER BY parent_facility_id",
+    }
+
+    result = {}
+    for key, q in queries.items():
+        job = CLIENT.query(q)
+        rows = [row[0] for row in job.result() if row[0] is not None]
+        result[key] = rows
+
+    return result
+
+
+def fetch_weather_data(params):
+    """
+    Fetches weather data from BigQuery with dynamic filters.
+
+    params: dict with keys
+        - station_id (str)
+        - parent_facility_id (str)
+        - start_date (YYYY-MM-DD string)
+        - end_date (YYYY-MM-DD string)
+        - limit (int)
+    """
+    table_ref = f"{PROJECT_ID}.{DATASET}.precipitation_weather"
+    where_clauses = []
+    query_params = []
+
+    # Optional filters
+    if params.get("station_id"):
+        where_clauses.append("station_id = @station_id")
+        query_params.append(bigquery.ScalarQueryParameter("station_id", "STRING", params["station_id"]))
+
+    if params.get("parent_facility_id"):
+        where_clauses.append("parent_facility_id = @parent_facility_id")
+        query_params.append(bigquery.ScalarQueryParameter("parent_facility_id", "STRING", params["parent_facility_id"]))
+
+    # Date filters
+    if params.get("start_date"):
+        where_clauses.append("PARSE_DATE('%m/%d/%Y', date) >= @start_date")
+
+    if params.get("start_date"):
+        where_clauses.append("PARSE_DATE('%Y-%m-%d', date) >= @start_date")
+
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+    # Limit
+    limit = params.get("limit", 1000)
+    query_params.append(bigquery.ScalarQueryParameter("limit", "INT64", limit))
+
+    sql = f"""
+    SELECT
+        date,
+        SAFE_CAST(tavg_fahrenheit AS FLOAT64) AS tavg_fahrenheit,
+        SAFE_CAST(tmax_fahrenheit AS FLOAT64) AS tmax_fahrenheit,
+        SAFE_CAST(tmin_fahrenheit AS FLOAT64) AS tmin_fahrenheit,
+        SAFE_CAST(prcp_inches AS FLOAT64) AS prcp_inches,
+        SAFE_CAST(snow_inches AS FLOAT64) AS snow_inches,
+        SAFE_CAST(snwd_inches AS FLOAT64) AS snwd_inches,
+        station_id,
+        parent_facility_id,
+        source_file_name,
+        ingestion_timestamp
+    FROM `{table_ref}`
+    {where_sql}
+    ORDER BY PARSE_DATE('%Y-%m-%d', date)
+    LIMIT @limit
+    """
+
+    job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+    query_job = CLIENT.query(sql, job_config=job_config)
+    rows = []
+
+    for row in query_job.result():
+        rows.append({
+            "date": row.date,
+            "tavg_fahrenheit": row.tavg_fahrenheit,
+            "tmax_fahrenheit": row.tmax_fahrenheit,
+            "tmin_fahrenheit": row.tmin_fahrenheit,
+            "prcp_inches": row.prcp_inches,
+            "snow_inches": row.snow_inches,
+            "snwd_inches": row.snwd_inches,
+            "station_id": row.station_id,
+            "parent_facility_id": row.parent_facility_id,
+            "source_file_name": row.source_file_name,
+            "ingestion_timestamp": row.ingestion_timestamp.isoformat() if row.ingestion_timestamp else None
+        })
+
+    return rows

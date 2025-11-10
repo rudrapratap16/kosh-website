@@ -40,6 +40,38 @@ def get_data():
 def health():
     return "OK", 200
 
+from services.bigquery_service import (
+    fetch_weather_data, fetch_weather_filters
+)
+
+@app.route("/weather/filters", methods=["GET"])
+def get_weather_filters():
+    """Returns unique weather dropdown values"""
+    try:
+        filters = fetch_weather_filters()
+        return jsonify(filters), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/weather/data", methods=["GET"])
+def get_weather_data():
+    """Fetch weather data based on filters"""
+    try:
+        params = {
+            "station_id": request.args.get("station_id"),
+            "parent_facility_id": request.args.get("parent_facility_id"),
+            "start_date": request.args.get("start_date"),
+            "end_date": request.args.get("end_date"),
+            "limit": int(request.args.get("limit", 1000)),
+        }
+        results = fetch_weather_data(params)
+        return jsonify({"data": results}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("BACKEND_PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+

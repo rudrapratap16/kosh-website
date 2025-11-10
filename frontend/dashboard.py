@@ -26,12 +26,25 @@ selected_parameter = st.sidebar.selectbox("Parameter Description", parameter_opt
 selected_base = st.sidebar.selectbox("Statistical Base", base_options, index=0)
 selected_unit = st.sidebar.selectbox("DMR Value Unit", unit_options, index=0)
 
-# Date range inputs (optional)
-st.sidebar.markdown("### Date range (YYYY-MM-DD)")
-start_date = st.sidebar.text_input("Start date (YYYY-MM-DD)", value="")
-end_date = st.sidebar.text_input("End date (YYYY-MM-DD)", value="")
 
-limit = st.sidebar.number_input("Rows to fetch", min_value=10, max_value=5000, value=1000, step=10)
+# Date range inputs (optional)
+st.sidebar.markdown("### Date range")
+start_date = st.sidebar.date_input(
+    "Start date", 
+    value=None, 
+    min_value=datetime(2000, 1, 1), 
+    max_value=datetime.today()
+)
+end_date = st.sidebar.date_input(
+    "End date", 
+    value=None, 
+    min_value=datetime(2000, 1, 1), 
+    max_value=datetime.today()
+)
+
+# Convert to string format (YYYY-MM-DD) before passing to API
+start_date_str = start_date.strftime("%Y-%m-%d") if start_date else None
+end_date_str = end_date.strftime("%Y-%m-%d") if end_date else None
 
 if st.sidebar.button("Apply"):
     with st.spinner("Fetching data..."):
@@ -40,9 +53,9 @@ if st.sidebar.button("Apply"):
             parameter=selected_parameter or None,
             base=selected_base or None,
             unit=selected_unit or None,
-            start_date=start_date or None,
-            end_date=end_date or None,
-            limit=limit
+            start_date=start_date_str,
+            end_date=end_date_str,
+            limit=5000
         )
 
     if data is None:
@@ -62,10 +75,11 @@ if st.sidebar.button("Apply"):
         except Exception:
             pass
 
-    # Raw data
-
     # Plot DMR Value vs Date
-    st.subheader("DMR Value over Time")
+    if selected_parameter:
+        st.subheader(f"{selected_parameter} over Time")
+    else:
+        st.subheader("DMR Value over Time")
     if "dmr_value" in df.columns and df["dmr_value"].notnull().any():
         plot_df = df.dropna(subset=["dmr_value"])
         # If date is parsed, use it, otherwise use index
@@ -76,7 +90,35 @@ if st.sidebar.button("Apply"):
             st.line_chart(plot_df["dmr_value"])
     else:
         st.info("No numeric dmr_value to plot.")
+    
+    # Raw data
     st.subheader("Raw Data")
     st.dataframe(df)
+
+    # Statistical Analysis Table
+    if "dmr_value" in df.columns and df["dmr_value"].notnull().any():
+        st.subheader("📊 Statistical Analysis")
+
+        numeric_series = pd.to_numeric(df["dmr_value"], errors="coerce").dropna()
+
+        if len(numeric_series) > 0:
+            stats = {
+                "Minimum": numeric_series.min(),
+                "Average": numeric_series.mean(),
+                "Median": numeric_series.median(),
+                "Maximum": numeric_series.max(),
+                "Standard Deviation": numeric_series.std(),
+                "Variance": numeric_series.var(),
+                "Kurtosis": numeric_series.kurtosis(),
+                "Skewness": numeric_series.skew(),
+            }
+
+            stats_df = pd.DataFrame(stats, index=["Value"]).T  # Transposed for neat layout
+            st.table(stats_df)
+        else:
+            st.info("No numeric values available for statistical analysis.")
+    else:
+        st.info("No numeric dmr_value column found for statistical analysis.")
+
 else:
     st.info("Set filters and click Apply to fetch data.")
