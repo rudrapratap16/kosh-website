@@ -5,3 +5,4 @@ flask
 google-cloud-bigquery
 gunicorn
 python-dotenv
+plotly
