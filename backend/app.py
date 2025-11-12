@@ -35,10 +35,25 @@ def get_data():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/data/by-outfall", methods=["GET"])
+def get_data_by_outfall():
+    print('sdofnsogfn')
+    """Get all data for a specific outfall (no other filters)"""
+    try:
+        outfall = request.args.get("outfall")
+        if not outfall:
+            return jsonify({"error": "outfall parameter required"}), 400
+        
+        limit = int(request.args.get("limit", 10000))
+        results = fetch_data({"outfall": outfall, "limit": limit})
+        return jsonify({"data": results}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Optional: health check
 @app.route("/health", methods=["GET"])
 def health():
-    return "OK", 200
+    return "okay, this route works", 200
 
 from services.bigquery_service import (
     fetch_weather_data, fetch_weather_filters
@@ -55,6 +70,7 @@ def get_weather_filters():
 
 @app.route("/weather/data", methods=["GET"])
 def get_weather_data():
+    print('sfbnrgngrin')
     """Fetch weather data based on filters"""
     try:
         params = {
@@ -73,5 +89,5 @@ def get_weather_data():
 
 if __name__ == "__main__":
     port = int(os.environ.get("BACKEND_PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)
 

@@ -146,8 +146,6 @@ def fetch_weather_data(params):
     params: dict with keys
         - station_id (str)
         - parent_facility_id (str)
-        - start_date (YYYY-MM-DD string)
-        - end_date (YYYY-MM-DD string)
         - limit (int)
     """
     table_ref = f"{PROJECT_ID}.{DATASET}.precipitation_weather"
@@ -163,21 +161,12 @@ def fetch_weather_data(params):
         where_clauses.append("parent_facility_id = @parent_facility_id")
         query_params.append(bigquery.ScalarQueryParameter("parent_facility_id", "STRING", params["parent_facility_id"]))
 
-    # Date filters
-    if params.get("start_date"):
-        where_clauses.append("PARSE_DATE('%m/%d/%Y', date) >= @start_date")
-
-    if params.get("start_date"):
-        where_clauses.append("PARSE_DATE('%Y-%m-%d', date) >= @start_date")
-
-
     where_sql = ""
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
     # Limit
     limit = params.get("limit", 1000)
-    query_params.append(bigquery.ScalarQueryParameter("limit", "INT64", limit))
 
     sql = f"""
     SELECT
@@ -194,8 +183,7 @@ def fetch_weather_data(params):
         ingestion_timestamp
     FROM `{table_ref}`
     {where_sql}
-    ORDER BY PARSE_DATE('%Y-%m-%d', date)
-    LIMIT @limit
+    LIMIT {limit}
     """
 
     job_config = bigquery.QueryJobConfig(query_parameters=query_params)
