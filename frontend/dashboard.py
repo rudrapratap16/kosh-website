@@ -312,152 +312,151 @@ if st.sidebar.button("Apply Filter"):
                 limit=5000
             )
 
-    if weather_data is None:
-        st.error("Failed to fetch weather data.")
-        st.stop()
+        if weather_data is None:
+            st.error("Failed to fetch weather data.")
+            st.stop()
 
-    if len(weather_data) == 0:
-        st.info("No rows match the selected filters.")
-        st.stop()
+        if len(weather_data) == 0:
+            st.info("No rows match the selected filters.")
+            st.stop()
 
-    df = pd.DataFrame(weather_data)
+        df = pd.DataFrame(weather_data)
 
-    # Parse date column
-    if "date" in df.columns:
-        try:
-            df["date"] = pd.to_datetime(df["date"], errors="coerce")
-        except Exception:
-            pass
+        # Parse date column
+        if "date" in df.columns:
+            try:
+                df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            except Exception:
+                pass
 
-    # Convert numeric columns
-    numeric_cols = ["tavg_fahrenheit", "tmax_fahrenheit", "tmin_fahrenheit", "prcp_inches", "snow_inches", "snwd_inches"]
-    for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        # Convert numeric columns
+        numeric_cols = ["tavg_fahrenheit", "tmax_fahrenheit", "tmin_fahrenheit", "prcp_inches", "snow_inches", "snwd_inches"]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Plot selected parameters
-    st.subheader("Weather Parameters Over Time")
-    
-    chart_data = df[["date"]].copy() if "date" in df.columns else df.copy()
-    
-    if plot_tavg and "tavg_fahrenheit" in df.columns:
-        chart_data["Avg Temp (°F)"] = df["tavg_fahrenheit"]
-    if plot_tmax and "tmax_fahrenheit" in df.columns:
-        chart_data["Max Temp (°F)"] = df["tmax_fahrenheit"]
-    if plot_tmin and "tmin_fahrenheit" in df.columns:
-        chart_data["Min Temp (°F)"] = df["tmin_fahrenheit"]
-    if plot_prcp and "prcp_inches" in df.columns:
-        chart_data["Precipitation (in)"] = df["prcp_inches"]
-    if plot_snow and "snow_inches" in df.columns:
-        chart_data["Snow (in)"] = df["snow_inches"]
-    if plot_snwd and "snwd_inches" in df.columns:
-        chart_data["Snow Depth (in)"] = df["snwd_inches"]
-
-    if "date" in chart_data.columns and len(chart_data.columns) > 1:
-        chart_data = chart_data.set_index("date").sort_index()
-        st.line_chart(chart_data)
-    else:
-        st.info("Select at least one parameter to plot.")
-
-    # Raw data
-    st.subheader("Raw Data")
-    st.dataframe(df)
-
-else:
-    # Handle NPDES Data
-    # Convert to string format (YYYY-MM-DD) before passing to API
-    start_date_str = start_date.strftime("%Y-%m-%d") if start_date else None
-    end_date_str = end_date.strftime("%Y-%m-%d") if end_date else None
-
-    with st.spinner("Fetching data..."):
-        data = get_data(
-            outfall=selected_outfall or None,
-            parameter=selected_parameter or None,
-            base=selected_base or None,
-            unit=selected_unit or None,
-            start_date=start_date_str,
-            end_date=end_date_str,
-            limit=5000
-        )
-
-    if data is None:
-        st.error("Failed to fetch data.")
-        st.stop()
-
-    if len(data) == 0:
-        st.info("No rows match the selected filters.")
-        st.stop()
-
-    df = pd.DataFrame(data)
-
-    # Try parsing monitoring_period_date to datetime
-    if "monitoring_period_date" in df.columns:
-        try:
-            df["monitoring_period_date"] = pd.to_datetime(df["monitoring_period_date"], errors="coerce")
-        except Exception:
-            pass
-
-    # Plot DMR Value vs Date
-    if selected_parameter:
-        st.subheader(f"{selected_parameter} over Time")
-    else:
-        st.subheader("DMR Value over Time")
-    if "dmr_value" in df.columns and df["dmr_value"].notnull().any():
-        plot_df = df.dropna(subset=["dmr_value"])
+        # Plot selected parameters
+        st.subheader("Weather Parameters Over Time")
         
-        # If date is parsed, use it, otherwise use index
-        if "monitoring_period_date" in plot_df.columns and not plot_df["monitoring_period_date"].isnull().all():
-            plot_df = plot_df.sort_values("monitoring_period_date")
-            plot_df = plot_df.set_index("monitoring_period_date")
-            st.line_chart(plot_df["dmr_value"])
+        chart_data = df[["date"]].copy() if "date" in df.columns else df.copy()
+        
+        if plot_tavg and "tavg_fahrenheit" in df.columns:
+            chart_data["Avg Temp (°F)"] = df["tavg_fahrenheit"]
+        if plot_tmax and "tmax_fahrenheit" in df.columns:
+            chart_data["Max Temp (°F)"] = df["tmax_fahrenheit"]
+        if plot_tmin and "tmin_fahrenheit" in df.columns:
+            chart_data["Min Temp (°F)"] = df["tmin_fahrenheit"]
+        if plot_prcp and "prcp_inches" in df.columns:
+            chart_data["Precipitation (in)"] = df["prcp_inches"]
+        if plot_snow and "snow_inches" in df.columns:
+            chart_data["Snow (in)"] = df["snow_inches"]
+        if plot_snwd and "snwd_inches" in df.columns:
+            chart_data["Snow Depth (in)"] = df["snwd_inches"]
+
+        if "date" in chart_data.columns and len(chart_data.columns) > 1:
+            chart_data = chart_data.set_index("date").sort_index()
+            st.line_chart(chart_data)
         else:
-            st.line_chart(plot_df["dmr_value"])
+            st.info("Select at least one parameter to plot.")
+
+        # Raw data
+        st.subheader("Raw Data")
+        st.dataframe(df)
+
     else:
-        st.info("No numeric dmr_value to plot.")
-    
-    # Raw data
-    st.subheader("Raw Data")
-    st.dataframe(df)
+        # Handle NPDES Data
+        # Convert to string format (YYYY-MM-DD) before passing to API
+        start_date_str = start_date.strftime("%Y-%m-%d") if start_date else None
+        end_date_str = end_date.strftime("%Y-%m-%d") if end_date else None
 
-    # Statistical Analysis Table
-    if "dmr_value" in df.columns and df["dmr_value"].notnull().any():
-        st.subheader("Statistical Analysis")
+        with st.spinner("Fetching data..."):
+            data = get_data(
+                outfall=selected_outfall or None,
+                parameter=selected_parameter or None,
+                base=selected_base or None,
+                unit=selected_unit or None,
+                start_date=start_date_str,
+                end_date=end_date_str,
+                limit=5000
+            )
 
-        numeric_series = pd.to_numeric(df["dmr_value"], errors="coerce").dropna()
+        if data is None:
+            st.error("Failed to fetch data.")
+            st.stop()
 
-        if len(numeric_series) > 0:
-            # Get the unit for display
-            unit_str = f" ({selected_unit})" if selected_unit else ""
+        if len(data) == 0:
+            st.info("No rows match the selected filters.")
+            st.stop()
+
+        df = pd.DataFrame(data)
+
+        # Try parsing monitoring_period_date to datetime
+        if "monitoring_period_date" in df.columns:
+            try:
+                df["monitoring_period_date"] = pd.to_datetime(df["monitoring_period_date"], errors="coerce")
+            except Exception:
+                pass
+
+        # Plot DMR Value vs Date
+        if selected_parameter:
+            st.subheader(f"{selected_parameter} over Time")
+        else:
+            st.subheader("DMR Value over Time")
+        if "dmr_value" in df.columns and df["dmr_value"].notnull().any():
+            plot_df = df.dropna(subset=["dmr_value"])
             
-            stats = {
-                "Metric": [
-                    f"Minimum{unit_str}",
-                    f"Average{unit_str}",
-                    f"Median{unit_str}",
-                    f"Maximum{unit_str}",
-                    f"Standard Deviation{unit_str}",
-                    f"Variance{unit_str}",
-                    "Kurtosis",
-                    "Skewness"
-                ],
-                "Value": [
-                    numeric_series.min(),
-                    numeric_series.mean(),
-                    numeric_series.median(),
-                    numeric_series.max(),
-                    numeric_series.std(),
-                    numeric_series.var(),
-                    numeric_series.kurtosis(),
-                    numeric_series.skew()
-                ]
-            }
-
-            stats_df = pd.DataFrame(stats)
-            st.dataframe(stats_df, hide_index=True)
+            # If date is parsed, use it, otherwise use index
+            if "monitoring_period_date" in plot_df.columns and not plot_df["monitoring_period_date"].isnull().all():
+                plot_df = plot_df.sort_values("monitoring_period_date")
+                plot_df = plot_df.set_index("monitoring_period_date")
+                st.line_chart(plot_df["dmr_value"])
+            else:
+                st.line_chart(plot_df["dmr_value"])
         else:
-            st.info("No numeric values available for statistical analysis.")
-    else:
-        st.info("No numeric dmr_value column found for statistical analysis.")
+            st.info("No numeric dmr_value to plot.")
+        
+        # Raw data
+        st.subheader("Raw Data")
+        st.dataframe(df)
 
-# else:
-#     st.info("Set filters and click 'Apply Filter' to fetch data.")
+        # Statistical Analysis Table
+        if "dmr_value" in df.columns and df["dmr_value"].notnull().any():
+            st.subheader("Statistical Analysis")
+
+            numeric_series = pd.to_numeric(df["dmr_value"], errors="coerce").dropna()
+
+            if len(numeric_series) > 0:
+                # Get the unit for display
+                unit_str = f" ({selected_unit})" if selected_unit else ""
+                
+                stats = {
+                    "Metric": [
+                        f"Minimum{unit_str}",
+                        f"Average{unit_str}",
+                        f"Median{unit_str}",
+                        f"Maximum{unit_str}",
+                        f"Standard Deviation{unit_str}",
+                        f"Variance{unit_str}",
+                        "Kurtosis",
+                        "Skewness"
+                    ],
+                    "Value": [
+                        numeric_series.min(),
+                        numeric_series.mean(),
+                        numeric_series.median(),
+                        numeric_series.max(),
+                        numeric_series.std(),
+                        numeric_series.var(),
+                        numeric_series.kurtosis(),
+                        numeric_series.skew()
+                    ]
+                }
+
+                stats_df = pd.DataFrame(stats)
+                st.dataframe(stats_df, hide_index=True)
+            else:
+                st.info("No numeric values available for statistical analysis.")
+        else:
+            st.info("No dmr_value column found for statistical analysis.")
+else:
+    st.info("Set filters and click 'Apply Filter' to fetch data.")
