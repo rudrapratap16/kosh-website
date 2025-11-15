@@ -70,7 +70,6 @@ def get_weather_filters():
 
 @app.route("/weather/data", methods=["GET"])
 def get_weather_data():
-    print('sfbnrgngrin')
     """Fetch weather data based on filters"""
     try:
         params = {

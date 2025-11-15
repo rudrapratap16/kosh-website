@@ -6,19 +6,43 @@ from datetime import datetime
 
 st.set_page_config(page_title="Environmental Data Dashboard", layout="wide")
 
-# Theme toggle icon at the top
-col1, col2 = st.columns([20, 1])
+# Theme toggle in the top right
+col1, col2 = st.columns([6, 1])
 with col2:
-    if st.session_state.get('theme', True):
-        if st.button("☀️", key="theme_toggle"):
-            st.session_state['theme'] = False
+    # Use a button with just an icon
+    if 'theme' not in st.session_state:
+        st.session_state.theme = True  # Default to dark mode
+    
+    # Display icon based on current theme
+    icon = "🌙" if st.session_state.theme else "☀️"
+    
+    # Custom CSS for subtle icon button
+    st.markdown("""
+        <style>
+        .theme-button button {
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            font-size: 20px !important;
+            opacity: 0.5 !important;
+        }
+        .theme-button button:hover {
+            opacity: 1 !important;
+            background-color: transparent !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Use markdown container for custom styling
+    with st.container():
+        st.markdown('<div class="theme-button">', unsafe_allow_html=True)
+        if st.button(icon, key="theme_toggle"):
+            st.session_state.theme = not st.session_state.theme
             st.rerun()
-        theme = True
-    else:
-        if st.button("🌙", key="theme_toggle"):
-            st.session_state['theme'] = True
-            st.rerun()
-        theme = False
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    theme = st.session_state.theme
 
 # Apply custom CSS based on theme
 if theme:
@@ -82,7 +106,7 @@ if theme:
             background-color: #333333 !important;
             border-color: #666666 !important;
         }
-        # Dataframe styling */
+        /* Dataframe styling */
         .stDataFrame {
             background-color: #1a1a1a !important;
         }
@@ -187,7 +211,7 @@ else:
             background-color: #F0F0F0 !important;
             border-color: #999999 !important;
         }
-        # Dataframe styling */
+        /* Dataframe styling */
         .stDataFrame {
             background-color: #FFFFFF !important;
         }
@@ -232,83 +256,73 @@ else:
         </style>
     """, unsafe_allow_html=True)
 
-# Load filter values
+# Load filters
 with st.spinner("Loading filter values..."):
     filters = get_filters()
-    weather_filters = get_weather_filters()
 
 if not filters:
     st.error("Could not load filter values from backend.")
     st.stop()
 
 # Sidebar filters
-st.sidebar.header("Data Filters")
+st.sidebar.header("Filters")
+outfall_options = [""] + filters.get("outfall_numbers", [])
 
-# Parameter Description dropdown with Precipitation Data option
-parameter_options = ["", "Precipitation Data"] + filters.get("parameter_descriptions", [])
+# Add Precipitation and Temperature to parameter options
+parameter_options = [""] + filters.get("parameter_descriptions", []) + ["Precipitation", "Temperature"]
+
+selected_outfall = st.sidebar.selectbox("Outfall", outfall_options, index=0)
 selected_parameter = st.sidebar.selectbox("Parameter", parameter_options, index=0)
 
-# Determine if precipitation data is selected
-is_precipitation = (selected_parameter == "Precipitation Data")
-
-if is_precipitation:
-    # Show precipitation-specific filters
-    if not weather_filters:
-        st.error("Could not load precipitation filter values from backend.")
-        st.stop()
-    
-    station_options = [""] + weather_filters.get("station_ids", [])
-    facility_options = [""] + weather_filters.get("parent_facility_ids", [])
-
-    selected_station = st.sidebar.selectbox("Station ID", station_options, index=0)
-    selected_facility = st.sidebar.selectbox("Parent Facility ID", facility_options, index=0)
-
-    # Parameter selection for plotting
-    st.sidebar.markdown("### Parameters to Plot")
-    plot_tavg = st.sidebar.checkbox("Average Temperature (°F)", value=True)
-    plot_tmax = st.sidebar.checkbox("Max Temperature (°F)", value=False)
-    plot_tmin = st.sidebar.checkbox("Min Temperature (°F)", value=False)
-    plot_prcp = st.sidebar.checkbox("Precipitation (inches)", value=True)
-    plot_snow = st.sidebar.checkbox("Snow (inches)", value=False)
-    plot_snwd = st.sidebar.checkbox("Snow Depth (inches)", value=False)
-
+# Dynamically adjust Statistical Base and Unit based on parameter selection
+if selected_parameter == "Precipitation":
+    # For Precipitation
+    selected_base = "Daily Total"
+    st.sidebar.text_input("Base", value=selected_base, disabled=True)
+    selected_unit = "inches"
+    st.sidebar.text_input("Unit", value=selected_unit, disabled=True)
+elif selected_parameter == "Temperature":
+    # For Temperature
+    temp_base_options = ["Daily Max", "Daily Min", "Daily Avg"]
+    selected_base = st.sidebar.selectbox("Base", temp_base_options, index=0)
+    selected_unit = "Fahrenheit"
+    st.sidebar.text_input("Unit", value=selected_unit, disabled=True)
 else:
-    # Show NPDES-specific filters
-    outfall_options = [""] + filters.get("outfall_numbers", [])
+    # For regular NPDES parameters
     base_options = [""] + filters.get("statistical_bases", [])
     unit_options = [""] + filters.get("dmr_value_units", [])
-
-    selected_outfall = st.sidebar.selectbox("Outfall", outfall_options, index=0)
     selected_base = st.sidebar.selectbox("Base", base_options, index=0)
     selected_unit = st.sidebar.selectbox("Unit", unit_options, index=0)
 
-    # Date range inputs (optional)
-    st.sidebar.markdown("### Date range")
-    start_date = st.sidebar.date_input(
-        "Start date", 
-        value=None, 
-        min_value=datetime(2000, 1, 1), 
-        max_value=datetime.today(),
-        format="DD/MM/YYYY",
-        key="npdes_start"
-    )
-    end_date = st.sidebar.date_input(
-        "End date", 
-        value=None, 
-        min_value=datetime(2000, 1, 1), 
-        max_value=datetime.today(),
-        format="DD/MM/YYYY",
-        key="npdes_end"
-    )
+# Date range inputs (optional)
+st.sidebar.markdown("### Date range")
+start_date = st.sidebar.date_input(
+    "Start date", 
+    value=None, 
+    min_value=datetime(2000, 1, 1), 
+    max_value=datetime.today(),
+    key="start_date"
+)
+end_date = st.sidebar.date_input(
+    "End date", 
+    value=None, 
+    min_value=datetime(2000, 1, 1), 
+    max_value=datetime.today(),
+    key="end_date"
+)
 
-# Apply Filter button
+# Convert to string format (YYYY-MM-DD) before passing to API
+start_date_str = start_date.strftime("%Y-%m-%d") if start_date else None
+end_date_str = end_date.strftime("%Y-%m-%d") if end_date else None
+
 if st.sidebar.button("Apply Filter"):
-    if is_precipitation:
-        # Handle Precipitation Data
+    # Determine which API to call based on parameter selection
+    if selected_parameter in ["Precipitation", "Temperature"]:
+        # Fetch weather data
         with st.spinner("Fetching weather data..."):
             weather_data = get_weather_data(
-                station_id=selected_station or None,
-                parent_facility_id=selected_facility or None,
+                station_id="USC00467342",  # Hardcoded station ID
+                parent_facility_id=None,
                 limit=5000
             )
 
@@ -326,6 +340,7 @@ if st.sidebar.button("Apply Filter"):
         if "date" in df.columns:
             try:
                 df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                df = df.sort_values("date")
             except Exception:
                 pass
 
@@ -335,40 +350,101 @@ if st.sidebar.button("Apply Filter"):
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        # Plot selected parameters
-        st.subheader("Weather Parameters Over Time")
-        
-        chart_data = df[["date"]].copy() if "date" in df.columns else df.copy()
-        
-        if plot_tavg and "tavg_fahrenheit" in df.columns:
-            chart_data["Avg Temp (°F)"] = df["tavg_fahrenheit"]
-        if plot_tmax and "tmax_fahrenheit" in df.columns:
-            chart_data["Max Temp (°F)"] = df["tmax_fahrenheit"]
-        if plot_tmin and "tmin_fahrenheit" in df.columns:
-            chart_data["Min Temp (°F)"] = df["tmin_fahrenheit"]
-        if plot_prcp and "prcp_inches" in df.columns:
-            chart_data["Precipitation (in)"] = df["prcp_inches"]
-        if plot_snow and "snow_inches" in df.columns:
-            chart_data["Snow (in)"] = df["snow_inches"]
-        if plot_snwd and "snwd_inches" in df.columns:
-            chart_data["Snow Depth (in)"] = df["snwd_inches"]
+        # Apply date filter if provided
+        if start_date and "date" in df.columns:
+            df = df[df["date"] >= pd.Timestamp(start_date)]
+        if end_date and "date" in df.columns:
+            df = df[df["date"] <= pd.Timestamp(end_date)]
 
-        if "date" in chart_data.columns and len(chart_data.columns) > 1:
-            chart_data = chart_data.set_index("date").sort_index()
-            st.line_chart(chart_data)
-        else:
-            st.info("Select at least one parameter to plot.")
+        if selected_parameter == "Precipitation":
+            # Plot Precipitation
+            st.subheader("Precipitation over Time")
+            if "prcp_inches" in df.columns and df["prcp_inches"].notnull().any():
+                plot_df = df.dropna(subset=["prcp_inches"])
+                
+                if "date" in plot_df.columns and not plot_df["date"].isnull().all():
+                    chart_data = plot_df.set_index("date")[["prcp_inches"]]
+                    chart_data.columns = ["Precipitation (inches)"]
+                    st.line_chart(chart_data)
+                else:
+                    st.line_chart(plot_df["prcp_inches"])
+            else:
+                st.info("No precipitation data available to plot.")
+
+            # Statistical Analysis for Precipitation
+            if "prcp_inches" in df.columns and df["prcp_inches"].notnull().any():
+                st.subheader("Statistical Analysis")
+                numeric_series = pd.to_numeric(df["prcp_inches"], errors="coerce").dropna()
+
+                if len(numeric_series) > 0:
+                    stats = {
+                        "Minimum (inches)": numeric_series.min(),
+                        "Average (inches)": numeric_series.mean(),
+                        "Median (inches)": numeric_series.median(),
+                        "Maximum (inches)": numeric_series.max(),
+                        "Standard Deviation (inches)": numeric_series.std(),
+                        "Variance (inches)": numeric_series.var(),
+                        "Kurtosis": numeric_series.kurtosis(),
+                        "Skewness": numeric_series.skew(),
+                    }
+
+                    stats_df = pd.DataFrame(stats, index=["Value"]).T
+                    st.table(stats_df)
+                else:
+                    st.info("No numeric values available for statistical analysis.")
+
+        elif selected_parameter == "Temperature":
+            # Plot Temperature based on selected base (Tmax, Tmin, Tavg)
+            st.subheader(f"Temperature ({selected_base}) over Time")
+            
+            temp_col_map = {
+                "Daily Max": "tmax_fahrenheit",
+                "Daily Min": "tmin_fahrenheit",
+                "Daily Avg": "tavg_fahrenheit"
+            }
+            
+            temp_col = temp_col_map.get(selected_base)
+            
+            if temp_col in df.columns and df[temp_col].notnull().any():
+                plot_df = df.dropna(subset=[temp_col])
+                
+                if "date" in plot_df.columns and not plot_df["date"].isnull().all():
+                    chart_data = plot_df.set_index("date")[[temp_col]]
+                    chart_data.columns = [f"{selected_base} (°F)"]
+                    st.line_chart(chart_data)
+                else:
+                    st.line_chart(plot_df[temp_col])
+            else:
+                st.info(f"No {selected_base} temperature data available to plot.")
+
+            # Statistical Analysis for Temperature
+            if temp_col in df.columns and df[temp_col].notnull().any():
+                st.subheader("Statistical Analysis")
+                numeric_series = pd.to_numeric(df[temp_col], errors="coerce").dropna()
+
+                if len(numeric_series) > 0:
+                    stats = {
+                        "Minimum (°F)": numeric_series.min(),
+                        "Average (°F)": numeric_series.mean(),
+                        "Median (°F)": numeric_series.median(),
+                        "Maximum (°F)": numeric_series.max(),
+                        "Standard Deviation (°F)": numeric_series.std(),
+                        "Variance (°F)": numeric_series.var(),
+                        "Kurtosis": numeric_series.kurtosis(),
+                        "Skewness": numeric_series.skew(),
+                    }
+
+                    stats_df = pd.DataFrame(stats, index=["Value"]).T
+                    st.table(stats_df)
+                else:
+                    st.info("No numeric values available for statistical analysis.")
 
         # Raw data
         st.subheader("Raw Data")
         st.dataframe(df)
 
     else:
-        # Handle NPDES Data
-        # Convert to string format (YYYY-MM-DD) before passing to API
-        start_date_str = start_date.strftime("%Y-%m-%d") if start_date else None
-        end_date_str = end_date.strftime("%Y-%m-%d") if end_date else None
-
+        # Regular NPDES data
         with st.spinner("Fetching data..."):
             data = get_data(
                 outfall=selected_outfall or None,
@@ -402,14 +478,22 @@ if st.sidebar.button("Apply Filter"):
             st.subheader(f"{selected_parameter} over Time")
         else:
             st.subheader("DMR Value over Time")
+            
         if "dmr_value" in df.columns and df["dmr_value"].notnull().any():
             plot_df = df.dropna(subset=["dmr_value"])
             
             # If date is parsed, use it, otherwise use index
             if "monitoring_period_date" in plot_df.columns and not plot_df["monitoring_period_date"].isnull().all():
                 plot_df = plot_df.sort_values("monitoring_period_date")
-                plot_df = plot_df.set_index("monitoring_period_date")
-                st.line_chart(plot_df["dmr_value"])
+                chart_data = plot_df.set_index("monitoring_period_date")[["dmr_value"]]
+                
+                # Rename column with unit if available
+                if selected_unit:
+                    chart_data.columns = [f"DMR Value ({selected_unit})"]
+                else:
+                    chart_data.columns = ["DMR Value"]
+                
+                st.line_chart(chart_data)
             else:
                 st.line_chart(plot_df["dmr_value"])
         else:
@@ -430,33 +514,22 @@ if st.sidebar.button("Apply Filter"):
                 unit_str = f" ({selected_unit})" if selected_unit else ""
                 
                 stats = {
-                    "Metric": [
-                        f"Minimum{unit_str}",
-                        f"Average{unit_str}",
-                        f"Median{unit_str}",
-                        f"Maximum{unit_str}",
-                        f"Standard Deviation{unit_str}",
-                        f"Variance{unit_str}",
-                        "Kurtosis",
-                        "Skewness"
-                    ],
-                    "Value": [
-                        numeric_series.min(),
-                        numeric_series.mean(),
-                        numeric_series.median(),
-                        numeric_series.max(),
-                        numeric_series.std(),
-                        numeric_series.var(),
-                        numeric_series.kurtosis(),
-                        numeric_series.skew()
-                    ]
+                    f"Minimum{unit_str}": numeric_series.min(),
+                    f"Average{unit_str}": numeric_series.mean(),
+                    f"Median{unit_str}": numeric_series.median(),
+                    f"Maximum{unit_str}": numeric_series.max(),
+                    f"Standard Deviation{unit_str}": numeric_series.std(),
+                    f"Variance{unit_str}": numeric_series.var(),
+                    "Kurtosis": numeric_series.kurtosis(),
+                    "Skewness": numeric_series.skew(),
                 }
 
-                stats_df = pd.DataFrame(stats)
-                st.dataframe(stats_df, hide_index=True)
+                stats_df = pd.DataFrame(stats, index=["Value"]).T
+                st.table(stats_df)
             else:
                 st.info("No numeric values available for statistical analysis.")
         else:
-            st.info("No dmr_value column found for statistical analysis.")
+            st.info("No numeric dmr_value column found for statistical analysis.")
+
 else:
     st.info("Set filters and click 'Apply Filter' to fetch data.")
