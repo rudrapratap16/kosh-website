@@ -1,27 +1,23 @@
-# Use a lightweight Node image
-FROM node:18-slim
+FROM node:22-slim
 
-# Set working directory
 WORKDIR /app
 
-# Copy dependency files first (improves caching)
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --omit=dev
+# Install all dependencies (including dev deps)
+RUN npm install
 
-# Copy the full project
 COPY . .
 
-# Build the React app
+# Build Vite project
 RUN npm run build
 
-# Install a lightweight static server
+# Install tiny production static server
 RUN npm install -g serve
 
-# Cloud Run provides PORT, but 8080 is recommended
+# Cloud Run port
 ENV PORT=8080
 EXPOSE $PORT
 
-# Start the static server on Cloud Run port
-CMD ["serve", "-s", "build", "-l", "8080"]
+# Serve Vite's dist folder
+CMD ["serve", "-s", "dist", "-l", "8080"]
