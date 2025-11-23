@@ -6,7 +6,7 @@ import os
 # Create Flask app at top level
 app = Flask(__name__)
 
-CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
+CORS(app, resources={r"/*": {"origins": "https://kosh-frontend-react-569071530463.europe-west1.run.app/"}})
 
 @app.route("/filters", methods=["GET"])
 def get_filters():
