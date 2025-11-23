@@ -1,23 +1,17 @@
-FROM node:22-slim
+FROM node:24-alpine
 
 WORKDIR /app
 
 COPY package*.json ./
 
-# Install all dependencies (including dev deps)
 RUN npm install
 
-COPY ./kosh_frontend/. .
+COPY . .
 
-# Build Vite project
 RUN npm run build
 
-# Install tiny production static server
 RUN npm install -g serve
 
-# Cloud Run port
-ENV PORT=8080
-EXPOSE $PORT
+EXPOSE 3000
 
-# Serve Vite's dist folder
-CMD ["serve", "-s", "dist", "-l", "8080"]
+CMD ["serve", "-s", "build", "-l", "3000"]
