@@ -7,7 +7,7 @@ COPY package*.json ./
 # Install all dependencies (including dev deps)
 RUN npm install
 
-COPY . .
+COPY ./kosh_frontend/. .
 
 # Build Vite project
 RUN npm run build
