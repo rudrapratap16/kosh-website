@@ -7,6 +7,7 @@ import os
 app = Flask(__name__)
 
 CORS(app, resources={r"/*": {"origins": "https://kosh-frontend-react-569071530463.europe-west1.run.app"}})
+# CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
 
 @app.route("/filters", methods=["GET"])
 def get_filters():
@@ -207,20 +208,22 @@ def get_statistics():
         }
         
         # Build WHERE clause
-        where_clauses = ["dmr_value IS NOT NULL"]
+        where_clauses = ["dmr_value IS NOT NULL", "dmr_value != ''"]
         
         if params["outfall"]:
-            where_clauses.append(f"outfall_number = '{params['outfall']}'")
+            where_clauses.append(f"TRIM(outfall_number) = '{params['outfall']}'")
         if params["parameter"]:
-            where_clauses.append(f"parameter_description = '{params['parameter']}'")
+            param_escaped = params['parameter'].replace("'", "\\'")
+            where_clauses.append(f"TRIM(parameter_description) = '{param_escaped}'")
         if params["base"]:
-            where_clauses.append(f"statistical_base = '{params['base']}'")
+            where_clauses.append(f"TRIM(statistical_base) = '{params['base']}'")
         if params["unit"]:
-            where_clauses.append(f"dmr_value_unit = '{params['unit']}'")
+            where_clauses.append(f"TRIM(dmr_value_unit) = '{params['unit']}'")
         if params["start_date"]:
-            where_clauses.append(f"monitoring_period_date >= '{params['start_date']}'")
+            # Parse STRING date with MM/DD/YYYY format
+            where_clauses.append(f"PARSE_DATE('%m/%d/%Y', monitoring_period_date) >= PARSE_DATE('%Y-%m-%d', '{params['start_date']}')")
         if params["end_date"]:
-            where_clauses.append(f"monitoring_period_date <= '{params['end_date']}'")
+            where_clauses.append(f"PARSE_DATE('%m/%d/%Y', monitoring_period_date) <= PARSE_DATE('%Y-%m-%d', '{params['end_date']}')")
         
         where_clause = " AND ".join(where_clauses)
         
@@ -230,6 +233,7 @@ def get_statistics():
                 SAFE_CAST(dmr_value AS FLOAT64) as value
             FROM `{table_ref}`
             WHERE {where_clause}
+                AND SAFE_CAST(dmr_value AS FLOAT64) IS NOT NULL
         ),
         basic_stats AS (
             SELECT 
@@ -257,10 +261,12 @@ def get_statistics():
         CROSS JOIN moment_stats m
         """
         
+        print(f"Executing query with WHERE: {where_clause}")
         query_job = client.query(query)
         results = list(query_job.result())
+        print(f"Results: {results}")
         
-        if results:
+        if results and results[0].count > 0:
             row = results[0]
             return jsonify({
                 "count": row.count,
@@ -274,13 +280,11 @@ def get_statistics():
                 "kurtosis": row.kurtosis
             }), 200
         
-        return jsonify({"error": "No data found"}), 404
+        return jsonify({"error": "No data found for the specified filters"}), 404
         
     except Exception as e:
+        print(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-
-
 
 
 if __name__ == "__main__":
