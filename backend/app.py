@@ -135,8 +135,11 @@ def get_initial_filters():
 @app.route("/api/filters/cascading", methods=["POST"])
 def get_cascading_filters():
     """
-    Get filtered options based on current selections
-    Request body: {outfall, parameter, base, unit} - all optional
+    Cascading filters with no lock-in:
+    - Outfalls: Always ALL
+    - Parameters: Filtered by outfall only
+    - Bases: Filtered by outfall + parameter (excluding base itself)
+    - Units: Filtered by outfall + parameter + base (excluding unit itself)
     """
     try:
         data = request.get_json()
@@ -145,27 +148,38 @@ def get_cascading_filters():
         base = data.get("base")
         unit = data.get("unit")
         
-        # Build WHERE clause dynamically
-        where_clauses = []
-        if outfall:
-            where_clauses.append(f"outfall_number = '{outfall}'")
-        if parameter:
-            where_clauses.append(f"parameter_description = '{parameter}'")
-        if base:
-            where_clauses.append(f"statistical_base = '{base}'")
-        if unit:
-            where_clauses.append(f"dmr_value_unit = '{unit}'")
+        # Build WHERE clauses for each dropdown
+        # Parameters: use only outfall
+        where_parameters = f"outfall_number = '{outfall}'" if outfall else "1=1"
         
-        where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
+        # Bases: use outfall + parameter (but not base itself)
+        clauses_bases = []
+        if outfall:
+            clauses_bases.append(f"outfall_number = '{outfall}'")
+        if parameter:
+            clauses_bases.append(f"parameter_description = '{parameter}'")
+        where_bases = " AND ".join(clauses_bases) if clauses_bases else "1=1"
+        
+        # Units: use outfall + parameter + base (but not unit itself)
+        clauses_units = []
+        if outfall:
+            clauses_units.append(f"outfall_number = '{outfall}'")
+        if parameter:
+            clauses_units.append(f"parameter_description = '{parameter}'")
+        if base:
+            clauses_units.append(f"statistical_base = '{base}'")
+        where_units = " AND ".join(clauses_units) if clauses_units else "1=1"
         
         query = f"""
         SELECT 
-            ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) as outfalls,
-            ARRAY_AGG(DISTINCT parameter_description IGNORE NULLS ORDER BY parameter_description) as parameters,
-            ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base) as bases,
-            ARRAY_AGG(DISTINCT dmr_value_unit IGNORE NULLS ORDER BY dmr_value_unit) as units
-        FROM `{table_ref}`
-        WHERE {where_clause}
+            (SELECT ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) 
+             FROM `{table_ref}`) as outfalls,
+            (SELECT ARRAY_AGG(DISTINCT parameter_description IGNORE NULLS ORDER BY parameter_description) 
+             FROM `{table_ref}` WHERE {where_parameters}) as parameters,
+            (SELECT ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base) 
+             FROM `{table_ref}` WHERE {where_bases}) as bases,
+            (SELECT ARRAY_AGG(DISTINCT dmr_value_unit IGNORE NULLS ORDER BY dmr_value_unit) 
+             FROM `{table_ref}` WHERE {where_units}) as units
         """
         
         query_job = client.query(query)
