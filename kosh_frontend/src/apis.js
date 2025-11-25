@@ -1,4 +1,5 @@
 const API_BASE = 'https://kosh-backend-569071530463.europe-west1.run.app';
+// const API_BASE = 'http://127.0.0.1:8080/';
 
 export const fetchInitialFilters = async () => {
   const response = await fetch(`${API_BASE}/api/filters/initial`);

@@ -7,14 +7,42 @@ import StatisticsView from './components/StatisticsView';
 import { fetchInitialFilters, fetchCascadingFilters, fetchData, fetchStatistics } from './apis.js';
 
 const App = () => {
+  // Helper function to format date as YYYY-MM-DD
+  const formatDate = (date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  // Calculate default dates
+  const getDefaultDates = () => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setFullYear(startDate.getFullYear() - 1);
+    
+    return {
+      startDate: formatDate(startDate),
+      endDate: formatDate(endDate)
+    };
+  };
+
+  const defaultDates = getDefaultDates();
+
   const [filters, setFilters] = useState({
     outfall: '',
     parameter: '',
     base: '',
     unit: '',
-    startDate: '',
-    endDate: ''
+    startDate: defaultDates.startDate,
+    endDate: defaultDates.endDate
   });
+
+  // const [filters, setFilters] = useState({
+  //   outfall: '',
+  //   parameter: '',
+  //   base: '',
+  //   unit: '',
+  //   startDate: '',
+  //   endDate: ''
+  // });
 
   const [options, setOptions] = useState({
     outfalls: [],
@@ -34,6 +62,19 @@ const App = () => {
     loadInitialFilters();
   }, []);
 
+  useEffect(() => {
+    const allFiltersSelected = filters.outfall && 
+                               filters.parameter && 
+                               filters.base && 
+                               filters.unit &&
+                               filters.startDate &&
+                               filters.endDate;
+    
+    if (allFiltersSelected) {
+      handleApplyFilters();
+    }
+  }, [filters]); // Runs whenever filters change
+
   const loadInitialFilters = async () => {
     try {
       const data = await fetchInitialFilters();
@@ -45,7 +86,24 @@ const App = () => {
   };
 
   const handleFilterChange = async (filterName, value) => {
-    const newFilters = { ...filters, [filterName]: value };
+    // Create new filters with cascading reset logic
+    let newFilters = { ...filters };
+    
+    // Set the changed filter
+    newFilters[filterName] = value;
+    
+    // Reset dependent filters based on which one changed
+    if (filterName === 'outfall') {
+      newFilters.parameter = '';
+      newFilters.base = '';
+      newFilters.unit = '';
+    } else if (filterName === 'parameter') {
+      newFilters.base = '';
+      newFilters.unit = '';
+    } else if (filterName === 'base') {
+      newFilters.unit = '';
+    }
+    
     setFilters(newFilters);
 
     try {
@@ -64,13 +122,15 @@ const App = () => {
   const handleApplyFilters = async () => {
     setLoading(true);
     try {
-      const result = await fetchData(filters);
-      setData(result.data || []);
-
-      if (activeTab === 'statistics') {
-        const statsResult = await fetchStatistics(filters);
-        setStatistics(statsResult);
-      }
+      // Fetch both data and statistics in parallel
+      const [dataResult, statsResult] = await Promise.all([
+        fetchData(filters),
+        fetchStatistics(filters)
+      ]);
+      
+      setData(dataResult.data || []);
+      setStatistics(statsResult);
+      
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -78,11 +138,11 @@ const App = () => {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'statistics' && filters.outfall) {
-      handleApplyFilters();
-    }
-  }, [activeTab]);
+  // useEffect(() => {
+  //   if (activeTab === 'statistics' && filters.outfall) {
+  //     handleApplyFilters();
+  //   }
+  // }, [activeTab]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -93,7 +153,7 @@ const App = () => {
         onDateChange={(field, value) => setFilters({ ...filters, [field]: value })}
         onApply={handleApplyFilters}
         loading={loading}
-        onCollapseChange={setSidebarCollapsed} // Add this line
+        onCollapseChange={setSidebarCollapsed}
       />
 
       {/* Main content area with dynamic left margin */}
@@ -105,7 +165,7 @@ const App = () => {
           <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
 
           <div className="bg-white rounded-lg shadow p-6">
-            {activeTab === 'graph' && <GraphView data={data} />}
+            {activeTab === 'graph' && <GraphView data={data} filters={filters} />}
             {activeTab === 'statistics' && <StatisticsView statistics={statistics} />}
             {activeTab === 'rawdata' && <RawDataView data={data} />}
           </div>
