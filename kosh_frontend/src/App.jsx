@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Sun, Moon } from 'lucide-react';
 import FilterBar from './components/FilterBar';
 import TabBar from './components/TabBar';
 import GraphView from './components/GraphView';
@@ -7,6 +8,8 @@ import StatisticsView from './components/StatisticsView';
 import { fetchInitialFilters, fetchCascadingFilters, fetchData, fetchStatistics } from './apis.js';
 
 const App = () => {
+  const [darkMode, setDarkMode] = useState(false);
+
   // Helper function to format date as YYYY-MM-DD
   const formatDate = (date) => {
     return date.toISOString().split('T')[0];
@@ -34,15 +37,6 @@ const App = () => {
     startDate: defaultDates.startDate,
     endDate: defaultDates.endDate
   });
-
-  // const [filters, setFilters] = useState({
-  //   outfall: '',
-  //   parameter: '',
-  //   base: '',
-  //   unit: '',
-  //   startDate: '',
-  //   endDate: ''
-  // });
 
   const [options, setOptions] = useState({
     outfalls: [],
@@ -73,7 +67,7 @@ const App = () => {
     if (allFiltersSelected) {
       handleApplyFilters();
     }
-  }, [filters]); // Runs whenever filters change
+  }, [filters]);
 
   const loadInitialFilters = async () => {
     try {
@@ -86,13 +80,10 @@ const App = () => {
   };
 
   const handleFilterChange = async (filterName, value) => {
-    // Create new filters with cascading reset logic
     let newFilters = { ...filters };
     
-    // Set the changed filter
     newFilters[filterName] = value;
     
-    // Reset dependent filters based on which one changed
     if (filterName === 'outfall') {
       newFilters.parameter = '';
       newFilters.base = '';
@@ -122,7 +113,6 @@ const App = () => {
   const handleApplyFilters = async () => {
     setLoading(true);
     try {
-      // Fetch both data and statistics in parallel
       const [dataResult, statsResult] = await Promise.all([
         fetchData(filters),
         fetchStatistics(filters)
@@ -138,14 +128,8 @@ const App = () => {
     }
   };
 
-  // useEffect(() => {
-  //   if (activeTab === 'statistics' && filters.outfall) {
-  //     handleApplyFilters();
-  //   }
-  // }, [activeTab]);
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <FilterBar
         filters={filters}
         options={options}
@@ -154,6 +138,7 @@ const App = () => {
         onApply={handleApplyFilters}
         loading={loading}
         onCollapseChange={setSidebarCollapsed}
+        darkMode={darkMode}
       />
 
       {/* Main content area with dynamic left margin */}
@@ -161,13 +146,34 @@ const App = () => {
         className="transition-all duration-300 p-6" 
         style={{ marginLeft: sidebarCollapsed ? '48px' : '320px' }}
       >
-        <div className="max-w-7xl mx-auto">
-          <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+        {/* Dark Mode Toggle Button */}
+        <button
+          onClick={() => setDarkMode(!darkMode)}
+          className={`fixed top-6 right-6 p-3 rounded-full shadow-lg transition-colors duration-300 z-20 focus:outline-none focus:ring-0 active:outline-none ${
+            darkMode 
+              ? 'bg-gray-800 hover:bg-gray-700 text-yellow-400' 
+              : 'bg-white hover:bg-gray-100 text-gray-700'
+          }`}
+          style={{ 
+            outline: 'none',
+            boxShadow: darkMode ? '0 10px 15px -3px rgba(0, 0, 0, 0.3)' : '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+            WebkitTapHighlightColor: 'transparent'
+          }}
+          onFocus={(e) => e.target.blur()}
+          title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            {activeTab === 'graph' && <GraphView data={data} filters={filters} />}
-            {activeTab === 'statistics' && <StatisticsView statistics={statistics} />}
-            {activeTab === 'rawdata' && <RawDataView data={data} />}
+        <div className="max-w-7xl mx-auto">
+          <TabBar activeTab={activeTab} setActiveTab={setActiveTab} darkMode={darkMode} />
+
+          <div className={`rounded-lg shadow p-6 transition-colors duration-300 ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {activeTab === 'graph' && <GraphView data={data} filters={filters} darkMode={darkMode} />}
+            {activeTab === 'statistics' && <StatisticsView statistics={statistics} darkMode={darkMode} />}
+            {activeTab === 'rawdata' && <RawDataView data={data} darkMode={darkMode} />}
           </div>
         </div>
       </div>

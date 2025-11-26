@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Download } from 'lucide-react';
 import ExcelJS from 'exceljs';
 
-const GraphView = ({ data, filters }) => {
+const GraphView = ({ data, filters, darkMode }) => {
   const chartRef = useRef(null);
 
   const chartData = data.map(item => ({
@@ -12,27 +12,22 @@ const GraphView = ({ data, filters }) => {
     limit: parseFloat(item.limit_value) || null
   }));
 
-  // Use parameter name in title, or default text
   const chartTitle = filters?.parameter 
     ? `${filters.parameter} Over Time` 
     : 'DMR Values Over Time';
 
   const handleDownload = async () => {
     try {
-      // Create a new workbook
       const workbook = new ExcelJS.Workbook();
       
-      // Sheet 1: Data Table
       const dataSheet = workbook.addWorksheet('Data');
       
-      // Add headers
       dataSheet.columns = [
         { header: 'Date', key: 'date', width: 15 },
         { header: `${filters?.parameter || 'DMR Value'}`, key: 'value', width: 20 },
         { header: 'Limit Value', key: 'limit', width: 20 }
       ];
       
-      // Add data rows
       chartData.forEach(item => {
         dataSheet.addRow({
           date: item.date,
@@ -41,7 +36,6 @@ const GraphView = ({ data, filters }) => {
         });
       });
       
-      // Style the header row
       dataSheet.getRow(1).font = { bold: true };
       dataSheet.getRow(1).fill = {
         type: 'pattern',
@@ -49,15 +43,12 @@ const GraphView = ({ data, filters }) => {
         fgColor: { argb: 'FFE0E0E0' }
       };
       
-      // Sheet 2: Chart Image
       const chartSheet = workbook.addWorksheet('Chart');
       
-      // Get the chart SVG
       const chartContainer = chartRef.current;
       if (chartContainer) {
         const svgElement = chartContainer.querySelector('svg');
         if (svgElement) {
-          // Create canvas and convert SVG to PNG
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           const svgString = new XMLSerializer().serializeToString(svgElement);
@@ -70,18 +61,15 @@ const GraphView = ({ data, filters }) => {
               canvas.width = svgElement.width.baseVal.value;
               canvas.height = svgElement.height.baseVal.value;
               
-              // Fill white background
               ctx.fillStyle = 'white';
               ctx.fillRect(0, 0, canvas.width, canvas.height);
               ctx.drawImage(img, 0, 0);
               
-              // Convert canvas to base64
               canvas.toBlob(async (blob) => {
                 const reader = new FileReader();
                 reader.onloadend = async () => {
                   const base64Image = reader.result.split(',')[1];
                   
-                  // Add image to Excel
                   const imageId = workbook.addImage({
                     base64: base64Image,
                     extension: 'png',
@@ -92,7 +80,6 @@ const GraphView = ({ data, filters }) => {
                     ext: { width: canvas.width, height: canvas.height }
                   });
                   
-                  // Generate and download Excel file
                   const buffer = await workbook.xlsx.writeBuffer();
                   const blob = new Blob([buffer], { 
                     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
@@ -125,7 +112,6 @@ const GraphView = ({ data, filters }) => {
 
   return (
     <div className="relative">
-      {/* Download Button */}
       {chartData.length > 0 && (
         <button
           onClick={handleDownload}
@@ -137,16 +123,27 @@ const GraphView = ({ data, filters }) => {
         </button>
       )}
 
-      <h2 className="text-xl font-semibold text-gray-800 mb-4 pr-32">{chartTitle}</h2>
+      <h2 className={`text-xl font-semibold mb-4 pr-32 ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+        {chartTitle}
+      </h2>
       {console.log('GraphView data:', chartData)}
       {chartData.length > 0 ? (
         <div ref={chartRef}>
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#e5e7eb'} />
+              <XAxis 
+                dataKey="date" 
+                stroke={darkMode ? '#9ca3af' : '#6b7280'}
+              />
+              <YAxis stroke={darkMode ? '#9ca3af' : '#6b7280'} />
+              <Tooltip 
+                contentStyle={{
+                  backgroundColor: darkMode ? '#1f2937' : '#ffffff',
+                  border: `1px solid ${darkMode ? '#374151' : '#e5e7eb'}`,
+                  color: darkMode ? '#f3f4f6' : '#111827'
+                }}
+              />
               <Legend />
               <Line type="monotone" dataKey="value" stroke="#3b82f6" name={filters?.parameter || "DMR Value"} />
               {chartData.some(d => d.limit !== null) && (
@@ -156,7 +153,9 @@ const GraphView = ({ data, filters }) => {
           </ResponsiveContainer>
         </div>
       ) : (
-        <p className="text-gray-500 text-center py-8">No data available. Please select filters and click Apply.</p>
+        <p className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          No data available. Please select filters and click Apply.
+        </p>
       )}
     </div>
   );
