@@ -6,15 +6,17 @@ import ExcelJS from 'exceljs';
 const GraphView = ({ data, filters, darkMode }) => {
   const chartRef = useRef(null);
 
+  // Updated to work with unified column names from combined endpoint
   const chartData = data.map(item => ({
-    date: item.monitoring_period_date,
-    value: parseFloat(item.dmr_value) || 0,
-    limit: parseFloat(item.limit_value) || null
+    date: item.date || item.monitoring_period_date,  // Support both column names
+    value: parseFloat(item.value || item.dmr_value) || 0,  // Support both column names
+    limit: parseFloat(item.limit_value) || null,
+    dataSource: item.data_source  // Track if it's NPDES or Weather data
   }));
 
   const chartTitle = filters?.parameter 
     ? `${filters.parameter} Over Time` 
-    : 'DMR Values Over Time';
+    : 'Values Over Time';
 
   const handleDownload = async () => {
     try {
@@ -24,15 +26,17 @@ const GraphView = ({ data, filters, darkMode }) => {
       
       dataSheet.columns = [
         { header: 'Date', key: 'date', width: 15 },
-        { header: `${filters?.parameter || 'DMR Value'}`, key: 'value', width: 20 },
-        { header: 'Limit Value', key: 'limit', width: 20 }
+        { header: `${filters?.parameter || 'Value'}`, key: 'value', width: 20 },
+        { header: 'Limit Value', key: 'limit', width: 20 },
+        { header: 'Data Source', key: 'dataSource', width: 15 }
       ];
       
       chartData.forEach(item => {
         dataSheet.addRow({
           date: item.date,
           value: item.value,
-          limit: item.limit !== null ? item.limit : 'N/A'
+          limit: item.limit !== null ? item.limit : 'N/A',
+          dataSource: item.dataSource || 'N/A'
         });
       });
       
@@ -87,7 +91,7 @@ const GraphView = ({ data, filters, darkMode }) => {
                   const downloadUrl = URL.createObjectURL(blob);
                   const link = document.createElement('a');
                   link.href = downloadUrl;
-                  link.download = `${filters?.parameter || 'dmr_data'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                  link.download = `${filters?.parameter || 'data'}_${new Date().toISOString().split('T')[0]}.xlsx`;
                   link.click();
                   URL.revokeObjectURL(downloadUrl);
                   
@@ -126,7 +130,8 @@ const GraphView = ({ data, filters, darkMode }) => {
       <h2 className={`text-xl font-semibold mb-4 pr-32 ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
         {chartTitle}
       </h2>
-      {console.log('GraphView data:', chartData)}
+      {console.log('GraphView chartData:', chartData)}
+      {console.log('First item:', chartData[0])}
       {chartData.length > 0 ? (
         <div ref={chartRef}>
           <ResponsiveContainer width="100%" height={400}>
@@ -145,7 +150,7 @@ const GraphView = ({ data, filters, darkMode }) => {
                 }}
               />
               <Legend />
-              <Line type="monotone" dataKey="value" stroke="#3b82f6" name={filters?.parameter || "DMR Value"} />
+              <Line type="monotone" dataKey="value" stroke="#3b82f6" name={filters?.parameter || "Value"} />
               {chartData.some(d => d.limit !== null) && (
                 <Line type="monotone" dataKey="limit" stroke="#ef4444" name="Limit Value" strokeDasharray="5 5" />
               )}

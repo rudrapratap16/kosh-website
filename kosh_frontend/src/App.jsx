@@ -5,7 +5,12 @@ import TabBar from './components/TabBar';
 import GraphView from './components/GraphView';
 import RawDataView from './components/RawDataView';
 import StatisticsView from './components/StatisticsView';
-import { fetchInitialFilters, fetchCascadingFilters, fetchData, fetchStatistics } from './apis.js';
+import { 
+  fetchInitialFilters, 
+  fetchCascadingFilters, 
+  fetchCombinedData,           // Changed from fetchData
+  fetchCombinedStatistics      // Changed from fetchStatistics
+} from './apis.js';
 
 const App = () => {
   const [darkMode, setDarkMode] = useState(false);
@@ -113,9 +118,10 @@ const App = () => {
   const handleApplyFilters = async () => {
     setLoading(true);
     try {
+      // Use the combined endpoints instead of separate NPDES-only endpoints
       const [dataResult, statsResult] = await Promise.all([
-        fetchData(filters),
-        fetchStatistics(filters)
+        fetchCombinedData(filters),        // Changed from fetchData
+        fetchCombinedStatistics(filters)   // Changed from fetchStatistics
       ]);
       
       setData(dataResult.data || []);
@@ -123,6 +129,9 @@ const App = () => {
       
     } catch (error) {
       console.error('Error fetching data:', error);
+      // Set empty states on error
+      setData([]);
+      setStatistics(null);
     } finally {
       setLoading(false);
     }

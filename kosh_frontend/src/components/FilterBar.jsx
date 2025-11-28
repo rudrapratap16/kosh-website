@@ -4,6 +4,14 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, loading, onCollapseChange, darkMode }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // Safely access options with fallback to empty arrays
+  const safeOptions = {
+    outfalls: options?.outfalls || [],
+    parameters: options?.parameters || [],
+    bases: options?.bases || [],
+    units: options?.units || []
+  };
+
   return (
     <div 
       className={`fixed left-0 top-0 h-full shadow-lg transition-all duration-300 z-10 group ${
@@ -50,7 +58,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
               }`}
             >
               <option value="">Select Outfall</option>
-              {options.outfalls.map(outfall => (
+              {safeOptions.outfalls.map(outfall => (
                 <option key={outfall} value={outfall}>{outfall}</option>
               ))}
             </select>
@@ -70,7 +78,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
               }`}
             >
               <option value="">Select Parameter</option>
-              {options.parameters.map(param => (
+              {safeOptions.parameters.map(param => (
                 <option key={param} value={param}>{param}</option>
               ))}
             </select>
@@ -90,7 +98,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
               }`}
             >
               <option value="">Select Base</option>
-              {options.bases.map(base => (
+              {safeOptions.bases.map(base => (
                 <option key={base} value={base}>{base}</option>
               ))}
             </select>
@@ -110,7 +118,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
               }`}
             >
               <option value="">Select Unit</option>
-              {options.units.map(unit => (
+              {safeOptions.units.map(unit => (
                 <option key={unit} value={unit}>{unit}</option>
               ))}
             </select>
