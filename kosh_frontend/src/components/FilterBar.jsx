@@ -6,6 +6,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
 
   // Safely access options with fallback to empty arrays
   const safeOptions = {
+    permit_numbers: options?.permit_numbers || [],
     outfalls: options?.outfalls || [],
     parameters: options?.parameters || [],
     bases: options?.bases || [],
@@ -46,10 +47,30 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
         <div className="space-y-4">
           <div>
             <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              NPDES Permit Number
+            </label>
+            <select
+              value={filters.permit_number || ''}
+              onChange={(e) => onFilterChange('permit_number', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                darkMode 
+                  ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                  : 'bg-white border-gray-300 text-gray-900'
+              }`}
+            >
+              <option value="">Select Permit Number</option>
+              {safeOptions.permit_numbers.map(permit => (
+                <option key={permit} value={permit}>{permit}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Outfall
             </label>
             <select
-              value={filters.outfall}
+              value={filters.outfall || ''}
               onChange={(e) => onFilterChange('outfall', e.target.value)}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 darkMode 
@@ -69,7 +90,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
               Parameters
             </label>
             <select
-              value={filters.parameter}
+              value={filters.parameter || ''}
               onChange={(e) => onFilterChange('parameter', e.target.value)}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 darkMode 
@@ -89,7 +110,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
               Base
             </label>
             <select
-              value={filters.base}
+              value={filters.base || ''}
               onChange={(e) => onFilterChange('base', e.target.value)}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 darkMode 
@@ -109,7 +130,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
               Unit
             </label>
             <select
-              value={filters.unit}
+              value={filters.unit || ''}
               onChange={(e) => onFilterChange('unit', e.target.value)}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 darkMode 
@@ -130,7 +151,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
             </label>
             <input
               type="date"
-              value={filters.startDate}
+              value={filters.startDate || ''}
               onChange={(e) => onDateChange('startDate', e.target.value)}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 darkMode 
@@ -146,7 +167,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
             </label>
             <input
               type="date"
-              value={filters.endDate}
+              value={filters.endDate || ''}
               onChange={(e) => onDateChange('endDate', e.target.value)}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 darkMode 

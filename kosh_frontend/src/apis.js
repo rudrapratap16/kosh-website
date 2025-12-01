@@ -1,7 +1,7 @@
 const API_BASE = 'https://kosh-backend-569071530463.europe-west1.run.app';
-// const API_BASE = 'http://127.0.0.1:8080/';
+// const API_BASE = 'http://127.0.0.1:8080';
 
-// Filter APIs - Now include both NPDES and Weather data
+// Filter APIs - Now include NPDES permit number, outfalls, and Weather data
 export const fetchInitialFilters = async () => {
   const response = await fetch(`${API_BASE}/api/filters/initial`);
   return response.json();
@@ -19,6 +19,7 @@ export const fetchCascadingFilters = async (filters) => {
 // Legacy NPDES-only endpoints (keep for backward compatibility if needed)
 export const fetchData = async (filters) => {
   const params = new URLSearchParams();
+  if (filters.permit_number) params.append('permit_number', filters.permit_number);
   if (filters.outfall) params.append('outfall', filters.outfall);
   if (filters.parameter) params.append('parameter', filters.parameter);
   if (filters.base) params.append('base', filters.base);
@@ -32,6 +33,7 @@ export const fetchData = async (filters) => {
 
 export const fetchStatistics = async (filters) => {
   const params = new URLSearchParams();
+  if (filters.permit_number) params.append('permit_number', filters.permit_number);
   if (filters.outfall) params.append('outfall', filters.outfall);
   if (filters.parameter) params.append('parameter', filters.parameter);
   if (filters.base) params.append('base', filters.base);
@@ -43,9 +45,10 @@ export const fetchStatistics = async (filters) => {
   return response.json();
 };
 
-// NEW: Combined NPDES + Weather endpoints
+// Combined NPDES + Weather endpoints
 export const fetchCombinedData = async (filters) => {
   const params = new URLSearchParams();
+  if (filters.permit_number) params.append('permit_number', filters.permit_number);
   if (filters.outfall) params.append('outfall', filters.outfall);
   if (filters.parameter) params.append('parameter', filters.parameter);
   if (filters.base) params.append('base', filters.base);
@@ -60,6 +63,7 @@ export const fetchCombinedData = async (filters) => {
 
 export const fetchCombinedStatistics = async (filters) => {
   const params = new URLSearchParams();
+  if (filters.permit_number) params.append('permit_number', filters.permit_number);
   if (filters.outfall) params.append('outfall', filters.outfall);
   if (filters.parameter) params.append('parameter', filters.parameter);
   if (filters.base) params.append('base', filters.base);

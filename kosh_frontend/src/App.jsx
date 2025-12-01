@@ -8,8 +8,8 @@ import StatisticsView from './components/StatisticsView';
 import { 
   fetchInitialFilters, 
   fetchCascadingFilters, 
-  fetchCombinedData,           // Changed from fetchData
-  fetchCombinedStatistics      // Changed from fetchStatistics
+  fetchCombinedData,
+  fetchCombinedStatistics
 } from './apis.js';
 
 const App = () => {
@@ -35,6 +35,7 @@ const App = () => {
   const defaultDates = getDefaultDates();
 
   const [filters, setFilters] = useState({
+    permit_number: '',  // Added permit_number
     outfall: '',
     parameter: '',
     base: '',
@@ -44,6 +45,7 @@ const App = () => {
   });
 
   const [options, setOptions] = useState({
+    permit_numbers: [],  // Added permit_numbers
     outfalls: [],
     parameters: [],
     bases: [],
@@ -62,8 +64,7 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    const allFiltersSelected = filters.outfall && 
-                               filters.parameter && 
+    const allFiltersSelected = filters.parameter && 
                                filters.base && 
                                filters.unit &&
                                filters.startDate &&
@@ -89,7 +90,13 @@ const App = () => {
     
     newFilters[filterName] = value;
     
-    if (filterName === 'outfall') {
+    // Clear dependent filters based on hierarchy
+    if (filterName === 'permit_number') {
+      newFilters.outfall = '';
+      newFilters.parameter = '';
+      newFilters.base = '';
+      newFilters.unit = '';
+    } else if (filterName === 'outfall') {
       newFilters.parameter = '';
       newFilters.base = '';
       newFilters.unit = '';
@@ -103,13 +110,15 @@ const App = () => {
     setFilters(newFilters);
 
     try {
-      const data = await fetchCascadingFilters({
+      // Send current filter values to cascading endpoint
+      const cascadingData = await fetchCascadingFilters({
+        permit_number: newFilters.permit_number || null,
         outfall: newFilters.outfall || null,
         parameter: newFilters.parameter || null,
-        base: newFilters.base || null,
-        unit: newFilters.unit || null
+        base: newFilters.base || null
       });
-      setOptions(data);
+      console.log('Cascading filter data:', cascadingData);
+      setOptions(cascadingData);
     } catch (error) {
       console.error('Error fetching cascading filters:', error);
     }
@@ -118,10 +127,9 @@ const App = () => {
   const handleApplyFilters = async () => {
     setLoading(true);
     try {
-      // Use the combined endpoints instead of separate NPDES-only endpoints
       const [dataResult, statsResult] = await Promise.all([
-        fetchCombinedData(filters),        // Changed from fetchData
-        fetchCombinedStatistics(filters)   // Changed from fetchStatistics
+        fetchCombinedData(filters),
+        fetchCombinedStatistics(filters)
       ]);
       
       setData(dataResult.data || []);
@@ -129,7 +137,6 @@ const App = () => {
       
     } catch (error) {
       console.error('Error fetching data:', error);
-      // Set empty states on error
       setData([]);
       setStatistics(null);
     } finally {

@@ -305,8 +305,8 @@ from flask import request, jsonify
 from config import PROJECT_ID, DATASET
 
 client = bigquery.Client(project=PROJECT_ID)
-npdes_table_ref = f"{PROJECT_ID}.{DATASET}.npdes_monitoring"  # Update with your actual NPDES table name
-weather_table_ref = f"{PROJECT_ID}.processed_data.prep_temp_snow"
+npdes_table_ref = f"{PROJECT_ID}.{DATASET}.npdes"  # Update with your actual NPDES table name
+weather_table_ref = f"{PROJECT_ID}.{DATASET}.prep_temp_snow"
 
 @app.route("/api/filters/initial", methods=["GET"])
 def get_initial_filters():
@@ -317,6 +317,10 @@ def get_initial_filters():
     try:
         query = f"""
         SELECT 
+            -- NPDES Permit Numbers from NPDES only
+            (SELECT ARRAY_AGG(DISTINCT npdes_permit_number IGNORE NULLS ORDER BY npdes_permit_number) 
+             FROM `{npdes_table_ref}`) as permit_numbers,
+            
             -- Outfalls from NPDES only
             (SELECT ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) 
              FROM `{npdes_table_ref}`) as outfalls,
@@ -352,6 +356,7 @@ def get_initial_filters():
         if results:
             row = results[0]
             return jsonify({
+                "permit_numbers": row.permit_numbers or [],
                 "outfalls": row.outfalls or [],
                 "parameters": row.parameters or [],
                 "bases": row.bases or [],
@@ -359,6 +364,7 @@ def get_initial_filters():
             }), 200
         
         return jsonify({
+            "permit_numbers": [],
             "outfalls": [],
             "parameters": [],
             "bases": [],
@@ -366,7 +372,7 @@ def get_initial_filters():
         }), 200
         
     except Exception as e:
-        print(f"Error in get_initial_filters: {str(e)}")  # Log the error
+        print(f"Error in get_initial_filters: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -374,26 +380,43 @@ def get_initial_filters():
 def get_cascading_filters():
     """
     Cascading filters that include both NPDES and Weather data
-    Weather parameters are always available regardless of outfall selection
+    Weather parameters are always available regardless of outfall/permit selection
     """
     try:
         data = request.get_json()
+        permit_number = data.get("permit_number")
         outfall = data.get("outfall")
         parameter = data.get("parameter")
         base = data.get("base")
         
-        # Outfalls: Always all from NPDES only
-        outfalls_query = f"""
-        SELECT ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) as outfalls
+        # Build NPDES filters
+        npdes_filters = []
+        if permit_number:
+            npdes_filters.append(f"npdes_permit_number = '{permit_number}'")
+        if outfall:
+            npdes_filters.append(f"outfall_number = '{outfall}'")
+        
+        npdes_filter_sql = " AND ".join(npdes_filters) if npdes_filters else "1=1"
+        
+        # Permit Numbers: Always all from NPDES
+        permit_numbers_query = f"""
+        SELECT ARRAY_AGG(DISTINCT npdes_permit_number IGNORE NULLS ORDER BY npdes_permit_number) as permit_numbers
         FROM `{npdes_table_ref}`
         """
         
-        # Parameters: NPDES (filtered by outfall) + Weather (always included)
-        npdes_param_filter = f"outfall_number = '{outfall}'" if outfall else "1=1"
+        # Outfalls: Filtered by permit number if selected
+        outfalls_filter = f"npdes_permit_number = '{permit_number}'" if permit_number else "1=1"
+        outfalls_query = f"""
+        SELECT ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) as outfalls
+        FROM `{npdes_table_ref}`
+        WHERE {outfalls_filter}
+        """
+        
+        # Parameters: NPDES (filtered by permit/outfall) + Weather (always included)
         parameters_query = f"""
         SELECT ARRAY_AGG(DISTINCT parameter_description IGNORE NULLS ORDER BY parameter_description) as parameters
         FROM (
-            SELECT parameter_description FROM `{npdes_table_ref}` WHERE {npdes_param_filter}
+            SELECT parameter_description FROM `{npdes_table_ref}` WHERE {npdes_filter_sql}
             UNION DISTINCT
             SELECT parameter_description FROM `{weather_table_ref}`
         )
@@ -401,25 +424,21 @@ def get_cascading_filters():
         
         # Bases: Filtered by parameter (from both tables)
         if parameter:
-            # Check if parameter exists in NPDES or Weather
             bases_query = f"""
             SELECT ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base) as bases
             FROM (
                 SELECT statistical_base FROM `{npdes_table_ref}` 
-                WHERE parameter_description = '{parameter}' 
-                {f"AND outfall_number = '{outfall}'" if outfall else ""}
+                WHERE parameter_description = '{parameter}' AND {npdes_filter_sql}
                 UNION DISTINCT
                 SELECT statistical_base FROM `{weather_table_ref}` 
                 WHERE parameter_description = '{parameter}'
             )
             """
         else:
-            # No parameter selected - show all bases from both tables
             bases_query = f"""
             SELECT ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base) as bases
             FROM (
-                SELECT statistical_base FROM `{npdes_table_ref}` 
-                {f"WHERE outfall_number = '{outfall}'" if outfall else ""}
+                SELECT statistical_base FROM `{npdes_table_ref}` WHERE {npdes_filter_sql}
                 UNION DISTINCT
                 SELECT statistical_base FROM `{weather_table_ref}`
             )
@@ -433,7 +452,7 @@ def get_cascading_filters():
             unit_filters.append(f"statistical_base = '{base}'")
         
         unit_where = " AND ".join(unit_filters) if unit_filters else "1=1"
-        npdes_unit_where = unit_where + (f" AND outfall_number = '{outfall}'" if outfall else "")
+        npdes_unit_where = f"{unit_where} AND {npdes_filter_sql}"
         
         units_query = f"""
         SELECT ARRAY_AGG(DISTINCT dmr_value_unit IGNORE NULLS ORDER BY dmr_value_unit) as units
@@ -447,6 +466,7 @@ def get_cascading_filters():
         # Combine all queries
         combined_query = f"""
         SELECT 
+            ({permit_numbers_query}) as permit_numbers,
             ({outfalls_query}) as outfalls,
             ({parameters_query}) as parameters,
             ({bases_query}) as bases,
@@ -459,6 +479,7 @@ def get_cascading_filters():
         if results:
             row = results[0]
             return jsonify({
+                "permit_numbers": row.permit_numbers or [],
                 "outfalls": row.outfalls or [],
                 "parameters": row.parameters or [],
                 "bases": row.bases or [],
@@ -466,6 +487,7 @@ def get_cascading_filters():
             }), 200
         
         return jsonify({
+            "permit_numbers": [],
             "outfalls": [],
             "parameters": [],
             "bases": [],
@@ -480,10 +502,11 @@ def get_cascading_filters():
 def get_combined_data():
     """
     Fetches data from both NPDES and Weather tables
-    Weather data appears regardless of outfall selection
+    Weather data appears regardless of permit/outfall selection
     """
     try:
         params = {
+            "permit_number": request.args.get("permit_number"),
             "outfall": request.args.get("outfall"),
             "parameter": request.args.get("parameter"),
             "base": request.args.get("base"),
@@ -499,6 +522,10 @@ def get_combined_data():
         query_params = []
         
         # NPDES filters
+        if params.get("permit_number"):
+            npdes_where.append("npdes_permit_number = @permit_number")
+            query_params.append(bigquery.ScalarQueryParameter("permit_number", "STRING", params["permit_number"]))
+        
         if params.get("outfall"):
             npdes_where.append("outfall_number = @outfall")
             query_params.append(bigquery.ScalarQueryParameter("outfall", "STRING", params["outfall"]))
@@ -541,11 +568,11 @@ def get_combined_data():
             SELECT
                 PARSE_DATE('%m/%d/%Y', monitoring_period_date) as date,
                 SAFE_CAST(dmr_value AS FLOAT64) AS value,
+                npdes_permit_number,
                 outfall_number,
                 parameter_description,
                 statistical_base,
                 dmr_value_unit,
-                npdes_permit_number,
                 dmr_comments,
                 source_file_name,
                 ingestion_timestamp,
@@ -559,11 +586,11 @@ def get_combined_data():
             SELECT
                 date,
                 value,
+                NULL as npdes_permit_number,
                 NULL as outfall_number,
                 parameter_description,
                 statistical_base,
                 dmr_value_unit,
-                NULL as npdes_permit_number,
                 NULL as dmr_comments,
                 source_file_name,
                 ingestion_timestamp,
@@ -584,11 +611,11 @@ def get_combined_data():
             rows.append({
                 "date": row.date.isoformat() if row.date else None,
                 "value": row.value,
+                "npdes_permit_number": row.npdes_permit_number,
                 "outfall_number": row.outfall_number,
                 "parameter_description": row.parameter_description,
                 "statistical_base": row.statistical_base,
                 "dmr_value_unit": row.dmr_value_unit,
-                "npdes_permit_number": row.npdes_permit_number,
                 "dmr_comments": row.dmr_comments,
                 "source_file_name": row.source_file_name,
                 "ingestion_timestamp": row.ingestion_timestamp.isoformat() if row.ingestion_timestamp else None,
@@ -608,6 +635,7 @@ def get_combined_statistics():
     """
     try:
         params = {
+            "permit_number": request.args.get("permit_number"),
             "outfall": request.args.get("outfall"),
             "parameter": request.args.get("parameter"),
             "base": request.args.get("base"),
@@ -620,6 +648,10 @@ def get_combined_statistics():
         npdes_where = []
         weather_where = []
         query_params = []
+        
+        if params.get("permit_number"):
+            npdes_where.append("npdes_permit_number = @permit_number")
+            query_params.append(bigquery.ScalarQueryParameter("permit_number", "STRING", params["permit_number"]))
         
         if params.get("outfall"):
             npdes_where.append("outfall_number = @outfall")
@@ -734,4 +766,3 @@ def get_combined_statistics():
 if __name__ == "__main__":
     port = int(os.environ.get("BACKEND_PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=True)
-
