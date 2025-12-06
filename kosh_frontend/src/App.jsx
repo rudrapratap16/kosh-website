@@ -35,7 +35,7 @@ const App = () => {
   const defaultDates = getDefaultDates();
 
   const [filters, setFilters] = useState({
-    permit_number: '',  // Added permit_number
+    permit_number: '',
     outfall: '',
     parameter: '',
     base: '',
@@ -45,7 +45,7 @@ const App = () => {
   });
 
   const [options, setOptions] = useState({
-    permit_numbers: [],  // Added permit_numbers
+    permit_numbers: [],
     outfalls: [],
     parameters: [],
     bases: [],
@@ -110,7 +110,6 @@ const App = () => {
     setFilters(newFilters);
 
     try {
-      // Send current filter values to cascading endpoint
       const cascadingData = await fetchCascadingFilters({
         permit_number: newFilters.permit_number || null,
         outfall: newFilters.outfall || null,
@@ -187,8 +186,16 @@ const App = () => {
           <div className={`rounded-lg shadow p-6 transition-colors duration-300 ${
             darkMode ? 'bg-gray-800' : 'bg-white'
           }`}>
-            {activeTab === 'graph' && <GraphView data={data} filters={filters} darkMode={darkMode} />}
-            {activeTab === 'statistics' && <StatisticsView statistics={statistics} darkMode={darkMode} />}
+            {activeTab === 'graph' && (
+              <div>
+                <GraphView data={data} filters={filters} darkMode={darkMode} />
+                {statistics && (
+                  <div className="mt-8">
+                    <StatisticsView statistics={statistics} darkMode={darkMode} />
+                  </div>
+                )}
+              </div>
+            )}
             {activeTab === 'rawdata' && <RawDataView data={data} darkMode={darkMode} />}
           </div>
         </div>

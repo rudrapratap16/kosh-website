@@ -19,18 +19,6 @@ const TabBar = ({ activeTab, setActiveTab, darkMode }) => {
           Graph
         </button>
         <button
-          onClick={() => setActiveTab('statistics')}
-          className={`px-6 py-3 font-medium transition-colors focus:outline-none ${
-            activeTab === 'statistics'
-              ? 'text-blue-500 border-b-2 border-blue-500'
-              : darkMode 
-                ? 'text-gray-400 hover:text-gray-200' 
-                : 'text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Statistics
-        </button>
-        <button
           onClick={() => setActiveTab('rawdata')}
           className={`px-6 py-3 font-medium transition-colors focus:outline-none ${
             activeTab === 'rawdata'
