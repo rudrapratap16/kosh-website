@@ -317,8 +317,8 @@ def get_initial_filters():
     try:
         query = f"""
         SELECT 
-            -- NPDES Permit Numbers from NPDES only
-            (SELECT ARRAY_AGG(DISTINCT npdes_permit_number IGNORE NULLS ORDER BY npdes_permit_number) 
+            -- Station Names from NPDES only
+            (SELECT ARRAY_AGG(DISTINCT station_name IGNORE NULLS ORDER BY station_name) 
              FROM `{npdes_table_ref}`) as permit_numbers,
             
             -- Outfalls from NPDES only
@@ -384,35 +384,35 @@ def get_cascading_filters():
     """
     try:
         data = request.get_json()
-        permit_number = data.get("permit_number")
+        permit_number = data.get("permit_number")  # This is actually station_name now
         outfall = data.get("outfall")
         parameter = data.get("parameter")
         base = data.get("base")
         
-        # Build NPDES filters
+        # Build NPDES filters (using station_name instead of npdes_permit_number)
         npdes_filters = []
         if permit_number:
-            npdes_filters.append(f"npdes_permit_number = '{permit_number}'")
+            npdes_filters.append(f"station_name = '{permit_number}'")
         if outfall:
             npdes_filters.append(f"outfall_number = '{outfall}'")
         
         npdes_filter_sql = " AND ".join(npdes_filters) if npdes_filters else "1=1"
         
-        # Permit Numbers: Always all from NPDES
+        # Station Names: Always all from NPDES
         permit_numbers_query = f"""
-        SELECT ARRAY_AGG(DISTINCT npdes_permit_number IGNORE NULLS ORDER BY npdes_permit_number) as permit_numbers
+        SELECT ARRAY_AGG(DISTINCT station_name IGNORE NULLS ORDER BY station_name) as permit_numbers
         FROM `{npdes_table_ref}`
         """
         
-        # Outfalls: Filtered by permit number if selected
-        outfalls_filter = f"npdes_permit_number = '{permit_number}'" if permit_number else "1=1"
+        # Outfalls: Filtered by station name if selected
+        outfalls_filter = f"station_name = '{permit_number}'" if permit_number else "1=1"
         outfalls_query = f"""
         SELECT ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) as outfalls
         FROM `{npdes_table_ref}`
         WHERE {outfalls_filter}
         """
         
-        # Parameters: NPDES (filtered by permit/outfall) + Weather (always included)
+        # Parameters: NPDES (filtered by station/outfall) + Weather (always included)
         parameters_query = f"""
         SELECT ARRAY_AGG(DISTINCT parameter_description IGNORE NULLS ORDER BY parameter_description) as parameters
         FROM (
@@ -506,7 +506,7 @@ def get_combined_data():
     """
     try:
         params = {
-            "permit_number": request.args.get("permit_number"),
+            "permit_number": request.args.get("permit_number"),  # This is station_name now
             "outfall": request.args.get("outfall"),
             "parameter": request.args.get("parameter"),
             "base": request.args.get("base"),
@@ -516,14 +516,14 @@ def get_combined_data():
             "limit": int(request.args.get("limit", 1000)),
         }
         
-        # Build NPDES filters
+        # Build NPDES filters (using station_name)
         npdes_where = []
         weather_where = []
         query_params = []
         
         # NPDES filters
         if params.get("permit_number"):
-            npdes_where.append("npdes_permit_number = @permit_number")
+            npdes_where.append("station_name = @permit_number")
             query_params.append(bigquery.ScalarQueryParameter("permit_number", "STRING", params["permit_number"]))
         
         if params.get("outfall"):
@@ -568,10 +568,18 @@ def get_combined_data():
             SELECT
                 PARSE_DATE('%m/%d/%Y', monitoring_period_date) as date,
                 SAFE_CAST(dmr_value AS FLOAT64) AS value,
+                station_name,
                 npdes_permit_number,
                 outfall_number,
+                monitoring_location_code,
+                limit_set_designator,
+                parameter_code,
                 parameter_description,
+                limit_value,
+                limit_value_unit,
+                dmr_value_type,
                 statistical_base,
+                limit_type_code,
                 dmr_value_unit,
                 dmr_comments,
                 source_file_name,
@@ -586,10 +594,18 @@ def get_combined_data():
             SELECT
                 date,
                 value,
+                NULL as station_name,
                 NULL as npdes_permit_number,
                 NULL as outfall_number,
+                NULL as monitoring_location_code,
+                NULL as limit_set_designator,
+                NULL as parameter_code,
                 parameter_description,
+                NULL as limit_value,
+                NULL as limit_value_unit,
+                NULL as dmr_value_type,
                 statistical_base,
+                NULL as limit_type_code,
                 dmr_value_unit,
                 NULL as dmr_comments,
                 source_file_name,
@@ -611,10 +627,18 @@ def get_combined_data():
             rows.append({
                 "date": row.date.isoformat() if row.date else None,
                 "value": row.value,
+                "station_name": row.station_name,
                 "npdes_permit_number": row.npdes_permit_number,
                 "outfall_number": row.outfall_number,
+                "monitoring_location_code": row.monitoring_location_code,
+                "limit_set_designator": row.limit_set_designator,
+                "parameter_code": row.parameter_code,
                 "parameter_description": row.parameter_description,
+                "limit_value": row.limit_value,
+                "limit_value_unit": row.limit_value_unit,
+                "dmr_value_type": row.dmr_value_type,
                 "statistical_base": row.statistical_base,
+                "limit_type_code": row.limit_type_code,
                 "dmr_value_unit": row.dmr_value_unit,
                 "dmr_comments": row.dmr_comments,
                 "source_file_name": row.source_file_name,
@@ -635,7 +659,7 @@ def get_combined_statistics():
     """
     try:
         params = {
-            "permit_number": request.args.get("permit_number"),
+            "permit_number": request.args.get("permit_number"),  # This is station_name now
             "outfall": request.args.get("outfall"),
             "parameter": request.args.get("parameter"),
             "base": request.args.get("base"),
@@ -644,13 +668,13 @@ def get_combined_statistics():
             "end_date": request.args.get("end_date"),
         }
         
-        # Build filters (same logic as combined data)
+        # Build filters (same logic as combined data, using station_name)
         npdes_where = []
         weather_where = []
         query_params = []
         
         if params.get("permit_number"):
-            npdes_where.append("npdes_permit_number = @permit_number")
+            npdes_where.append("station_name = @permit_number")
             query_params.append(bigquery.ScalarQueryParameter("permit_number", "STRING", params["permit_number"]))
         
         if params.get("outfall"):

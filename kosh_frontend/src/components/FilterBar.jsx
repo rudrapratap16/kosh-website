@@ -409,18 +409,14 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
       </button>
 
       <div className={`h-full overflow-y-auto p-6 pt-16 ${isCollapsed ? 'invisible' : 'visible'}`}>
-        <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
-          Filters
-        </h2>
-        
         <div className="space-y-4">
           <SearchableSelect
             value={filters.permit_number}
             options={safeOptions.permit_numbers}
             onChange={(value) => onFilterChange('permit_number', value)}
-            placeholder="Select Permit Number"
+            placeholder="Select Station"
             darkMode={darkMode}
-            label="NPDES Permit Number"
+            label="Station Name"
           />
 
           <SearchableSelect

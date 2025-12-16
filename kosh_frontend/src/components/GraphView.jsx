@@ -9,7 +9,6 @@ const GraphView = ({ data, filters, darkMode }) => {
   const chartData = data.map(item => ({
     date: item.date || item.monitoring_period_date,
     value: parseFloat(item.value || item.dmr_value) || 0,
-    limit: parseFloat(item.limit_value) || null,
     dataSource: item.data_source
   }));
 
@@ -61,131 +60,159 @@ const GraphView = ({ data, filters, darkMode }) => {
   };
 
   const handleDownload = async () => {
-      try {
-        const workbook = new ExcelJS.Workbook();
-        
-        // Sheet 1: Raw Data
-        const rawDataSheet = workbook.addWorksheet('Raw Data');
-        rawDataSheet.columns = [
-          { header: 'NPDES Permit Number', key: 'npdes_permit_number', width: 20 },
-          { header: 'Outfall Number', key: 'outfall_number', width: 15 },
-          { header: 'Monitoring Location Code', key: 'monitoring_location_code', width: 25 },
-          { header: 'Limit Set Designator', key: 'limit_set_designator', width: 20 },
-          { header: 'Parameter Code', key: 'parameter_code', width: 15 },
-          { header: 'Parameter Description', key: 'parameter_description', width: 30 },
-          { header: 'Monitoring Period Date', key: 'monitoring_period_date', width: 20 },
-          { header: 'Limit Value', key: 'limit_value', width: 15 },
-          { header: 'Limit Value Unit', key: 'limit_value_unit', width: 15 },
-          { header: 'DMR Value Type', key: 'dmr_value_type', width: 15 },
-          { header: 'Statistical Base', key: 'statistical_base', width: 15 },
-          { header: 'Limit Type Code', key: 'limit_type_code', width: 15 },
-          { header: 'DMR Value', key: 'dmr_value', width: 15 },
-          { header: 'DMR Value Unit', key: 'dmr_value_unit', width: 15 },
-          { header: 'DMR Comments', key: 'dmr_comments', width: 30 },
-          { header: 'Source File Name', key: 'source_file_name', width: 30 },
-          { header: 'Ingestion Timestamp', key: 'ingestion_timestamp', width: 20 }
-        ];
-        
-        data.forEach(row => {
-          rawDataSheet.addRow({
-            npdes_permit_number: row.npdes_permit_number || '',
-            outfall_number: row.outfall_number || '',
-            monitoring_location_code: row.monitoring_location_code || '',
-            limit_set_designator: row.limit_set_designator || '',
-            parameter_code: row.parameter_code || '',
-            parameter_description: row.parameter_description || '',
-            monitoring_period_date: row.monitoring_period_date || '',
-            limit_value: row.limit_value || '',
-            limit_value_unit: row.limit_value_unit || '',
-            dmr_value_type: row.dmr_value_type || '',
-            statistical_base: row.statistical_base || '',
-            limit_type_code: row.limit_type_code || '',
-            dmr_value: row.value || '',
-            dmr_value_unit: row.dmr_value_unit || '',
-            dmr_comments: row.dmr_comments || '',
-            source_file_name: row.source_file_name || '',
-            ingestion_timestamp: row.ingestion_timestamp || ''
-          });
+    try {
+      const workbook = new ExcelJS.Workbook();
+      
+      // Sheet 1: Raw Data
+      const rawDataSheet = workbook.addWorksheet('Raw Data');
+      rawDataSheet.columns = [
+        { header: 'NPDES Permit Number', key: 'npdes_permit_number', width: 20 },
+        { header: 'Outfall Number', key: 'outfall_number', width: 15 },
+        { header: 'Monitoring Location Code', key: 'monitoring_location_code', width: 25 },
+        { header: 'Limit Set Designator', key: 'limit_set_designator', width: 20 },
+        { header: 'Parameter Code', key: 'parameter_code', width: 15 },
+        { header: 'Parameter Description', key: 'parameter_description', width: 30 },
+        { header: 'Monitoring Period Date', key: 'monitoring_period_date', width: 20 },
+        { header: 'Limit Value', key: 'limit_value', width: 15 },
+        { header: 'Limit Value Unit', key: 'limit_value_unit', width: 15 },
+        { header: 'DMR Value Type', key: 'dmr_value_type', width: 15 },
+        { header: 'Statistical Base', key: 'statistical_base', width: 15 },
+        { header: 'Limit Type Code', key: 'limit_type_code', width: 15 },
+        { header: 'DMR Value', key: 'dmr_value', width: 15 },
+        { header: 'DMR Value Unit', key: 'dmr_value_unit', width: 15 },
+        { header: 'DMR Comments', key: 'dmr_comments', width: 30 },
+        { header: 'Source File Name', key: 'source_file_name', width: 30 },
+        { header: 'Ingestion Timestamp', key: 'ingestion_timestamp', width: 20 }
+      ];
+      
+      data.forEach(row => {
+        rawDataSheet.addRow({
+          npdes_permit_number: row.npdes_permit_number || '',
+          outfall_number: row.outfall_number || '',
+          monitoring_location_code: row.monitoring_location_code || '',
+          limit_set_designator: row.limit_set_designator || '',
+          parameter_code: row.parameter_code || '',
+          parameter_description: row.parameter_description || '',
+          monitoring_period_date: row.monitoring_period_date || '',
+          limit_value: row.limit_value || '',
+          limit_value_unit: row.limit_value_unit || '',
+          dmr_value_type: row.dmr_value_type || '',
+          statistical_base: row.statistical_base || '',
+          limit_type_code: row.limit_type_code || '',
+          dmr_value: row.value || '',
+          dmr_value_unit: row.dmr_value_unit || '',
+          dmr_comments: row.dmr_comments || '',
+          source_file_name: row.source_file_name || '',
+          ingestion_timestamp: row.ingestion_timestamp || ''
         });
-        
-        rawDataSheet.getRow(1).font = { bold: true };
-        rawDataSheet.getRow(1).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFE0E0E0' }
-        };
-        
-        // Sheet 2: Chart Data
-        const chartData = data.map(item => ({
-          date: item.date || item.monitoring_period_date,
-          value: parseFloat(item.value || item.dmr_value) || 0,
-          limit: parseFloat(item.limit_value) || null
-        }));
-  
-        const chartSheet = workbook.addWorksheet('Chart Data');
-        chartSheet.columns = [
-          { header: 'Date', key: 'date', width: 20 },
-          { header: filters?.parameter || 'Value', key: 'value', width: 15 },
-          { header: 'Limit Value', key: 'limit', width: 15 }
-        ];
-        
-        chartData.forEach(item => {
-          chartSheet.addRow({
-            date: item.date,
-            value: item.value,
-            limit: item.limit !== null ? item.limit : ''
-          });
+      });
+      
+      rawDataSheet.getRow(1).font = { bold: true };
+      rawDataSheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+      
+      // Sheet 2: Chart Data
+      const chartData = data.map(item => ({
+        date: item.date || item.monitoring_period_date,
+        value: parseFloat(item.value || item.dmr_value) || 0
+      }));
+
+      const chartSheet = workbook.addWorksheet('Chart Data');
+      chartSheet.columns = [
+        { header: 'Date', key: 'date', width: 20 },
+        { header: filters?.parameter || 'Value', key: 'value', width: 15 }
+      ];
+      
+      chartData.forEach(item => {
+        chartSheet.addRow({
+          date: item.date,
+          value: item.value
         });
-        
-        chartSheet.getRow(1).font = { bold: true };
-        chartSheet.getRow(1).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFE0E0E0' }
-        };
-        
-        // Sheet 3: Statistics
-        const statsSheet = workbook.addWorksheet('Statistics');
-        statsSheet.columns = [
-          { header: 'Metric', key: 'metric', width: 25 },
-          { header: 'Value', key: 'value', width: 20 }
-        ];
-        
-        const stats = calculateStatistics(data);
-        
-        statsSheet.addRow({ metric: 'Count', value: stats.count });
-        statsSheet.addRow({ metric: 'Minimum', value: stats.min.toFixed(2) });
-        statsSheet.addRow({ metric: 'Maximum', value: stats.max.toFixed(2) });
-        statsSheet.addRow({ metric: 'Mean', value: stats.mean.toFixed(2) });
-        statsSheet.addRow({ metric: 'Median', value: stats.median.toFixed(2) });
-        statsSheet.addRow({ metric: 'Standard Deviation', value: stats.std_dev.toFixed(2) });
-        statsSheet.addRow({ metric: 'Variance', value: stats.variance.toFixed(2) });
-        statsSheet.addRow({ metric: 'Skewness', value: stats.skewness.toFixed(2) });
-        statsSheet.addRow({ metric: 'Kurtosis', value: stats.kurtosis.toFixed(2) });
-        
-        statsSheet.getRow(1).font = { bold: true };
-        statsSheet.getRow(1).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFE0E0E0' }
-        };
-        
-        const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { 
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${filters?.parameter || 'data'}_${new Date().toISOString().split('T')[0]}.xlsx`;
-        link.click();
-        URL.revokeObjectURL(url);
-        
-      } catch (error) {
-        console.error('Error downloading file:', error);
-        alert('Error downloading file. Please try again.');
-      }
-    };
+      });
+      
+      chartSheet.getRow(1).font = { bold: true };
+      chartSheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+      
+      // Add chart to Chart Data sheet
+      chartSheet.addImage({
+        image: workbook.addImage({
+          base64: '', // We'll create a chart using Excel's native charting
+          extension: 'png',
+        }),
+        tl: { col: 4, row: 1 },
+        ext: { width: 600, height: 400 }
+      });
+      
+      // Add chart using worksheet chart support
+      const dataRowCount = chartData.length;
+      
+      // Create the chart (Note: ExcelJS has limited chart support, but we can add chart XML)
+      chartSheet.addChart = {
+        type: 'line',
+        name: `${filters?.parameter || 'Parameter'} Over Time`,
+        position: 'E2:N22',
+        series: [
+          {
+            name: filters?.parameter || 'Value',
+            categories: `'Chart Data'!$A$2:$A$${dataRowCount + 1}`,
+            values: `'Chart Data'!$B$2:$B$${dataRowCount + 1}`,
+          }
+        ],
+        axes: {
+          category: { title: 'Date' },
+          value: { title: filters?.parameter || 'Value' }
+        }
+      };
+      
+      // Sheet 3: Statistics
+      const statsSheet = workbook.addWorksheet('Statistics');
+      statsSheet.columns = [
+        { header: 'Metric', key: 'metric', width: 25 },
+        { header: 'Value', key: 'value', width: 20 }
+      ];
+      
+      const stats = calculateStatistics(data);
+      
+      statsSheet.addRow({ metric: 'Count', value: stats.count });
+      statsSheet.addRow({ metric: 'Minimum', value: stats.min.toFixed(2) });
+      statsSheet.addRow({ metric: 'Maximum', value: stats.max.toFixed(2) });
+      statsSheet.addRow({ metric: 'Mean', value: stats.mean.toFixed(2) });
+      statsSheet.addRow({ metric: 'Median', value: stats.median.toFixed(2) });
+      statsSheet.addRow({ metric: 'Standard Deviation', value: stats.std_dev.toFixed(2) });
+      statsSheet.addRow({ metric: 'Variance', value: stats.variance.toFixed(2) });
+      statsSheet.addRow({ metric: 'Skewness', value: stats.skewness.toFixed(2) });
+      statsSheet.addRow({ metric: 'Kurtosis', value: stats.kurtosis.toFixed(2) });
+      
+      statsSheet.getRow(1).font = { bold: true };
+      statsSheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+      
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${filters?.parameter || 'data'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Error downloading file. Please try again.');
+    }
+  };
 
   return (
     <div className="relative">
@@ -225,9 +252,6 @@ const GraphView = ({ data, filters, darkMode }) => {
               />
               <Legend />
               <Line type="monotone" dataKey="value" stroke="#3b82f6" name={filters?.parameter || "Value"} />
-              {chartData.some(d => d.limit !== null) && (
-                <Line type="monotone" dataKey="limit" stroke="#ef4444" name="Limit Value" strokeDasharray="5 5" />
-              )}
             </LineChart>
           </ResponsiveContainer>
         </div>

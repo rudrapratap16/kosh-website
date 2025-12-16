@@ -55,6 +55,7 @@ const App = () => {
   
   const [activeTab, setActiveTab] = useState('graph');
   const [data, setData] = useState([]);
+  const [allFacilityData, setAllFacilityData] = useState([]); // NEW: Store all facility data
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -126,6 +127,7 @@ const App = () => {
   const handleApplyFilters = async () => {
     setLoading(true);
     try {
+      // Fetch filtered data for graph and statistics
       const [dataResult, statsResult] = await Promise.all([
         fetchCombinedData(filters),
         fetchCombinedStatistics(filters)
@@ -134,9 +136,22 @@ const App = () => {
       setData(dataResult.data || []);
       setStatistics(statsResult);
       
+      // NEW: Fetch all facility data (only permit_number, outfall, and date range)
+      const facilityFilters = {
+        permit_number: filters.permit_number,
+        outfall: filters.outfall,
+        startDate: filters.startDate,
+        endDate: filters.endDate
+        // Intentionally exclude parameter, base, and unit
+      };
+      
+      const allDataResult = await fetchCombinedData(facilityFilters);
+      setAllFacilityData(allDataResult.data || []);
+      
     } catch (error) {
       console.error('Error fetching data:', error);
       setData([]);
+      setAllFacilityData([]);
       setStatistics(null);
     } finally {
       setLoading(false);
@@ -196,7 +211,13 @@ const App = () => {
                 )}
               </div>
             )}
-            {activeTab === 'rawdata' && <RawDataView data={data} darkMode={darkMode} />}
+            {activeTab === 'rawdata' && (
+              <RawDataView 
+                data={allFacilityData} 
+                darkMode={darkMode} 
+                filters={filters}
+              />
+            )}
           </div>
         </div>
       </div>
