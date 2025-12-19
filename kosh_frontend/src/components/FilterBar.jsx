@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, ChevronDown, Search, X, Calendar } from 'lucide-react';
 
-const SearchableSelect = ({ value, options, onChange, placeholder, darkMode, label }) => {
+const SearchableSelect = ({ value, options, onChange, placeholder, darkMode, label, displayFormatter }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
@@ -47,7 +47,7 @@ const SearchableSelect = ({ value, options, onChange, placeholder, darkMode, lab
         }`}
       >
         <span className={value ? '' : 'text-gray-500'}>
-          {value || placeholder}
+          {value ? (displayFormatter ? displayFormatter(value) : value) : placeholder}
         </span>
         <div className="flex items-center gap-2">
           {value && (
@@ -100,7 +100,7 @@ const SearchableSelect = ({ value, options, onChange, placeholder, darkMode, lab
                         : 'hover:bg-gray-100 text-gray-900'
                   }`}
                 >
-                  {option}
+                  {displayFormatter ? displayFormatter(option) : option}
                 </div>
               ))
             ) : (
@@ -201,7 +201,7 @@ const CustomDatePicker = ({ value, onChange, label, darkMode }) => {
       calendarDays.push(
         <div
           key={`prev-${i}`}
-          className={`p-2 text-center text-sm ${
+          className={`p-1 text-center text-xs ${
             darkMode ? 'text-gray-600' : 'text-gray-400'
           } opacity-40`}
         >
@@ -225,7 +225,7 @@ const CustomDatePicker = ({ value, onChange, label, darkMode }) => {
         <div
           key={day}
           onClick={() => handleDateClick(day)}
-          className={`p-2 text-center text-sm cursor-pointer rounded-lg transition-colors ${
+          className={`p-1 text-center text-xs cursor-pointer rounded-lg transition-colors ${
             isSelected
               ? 'bg-blue-600 text-white font-semibold'
               : isToday
@@ -248,7 +248,7 @@ const CustomDatePicker = ({ value, onChange, label, darkMode }) => {
       calendarDays.push(
         <div
           key={`next-${i}`}
-          className={`p-2 text-center text-sm ${
+          className={`p-1 text-center text-xs ${
             darkMode ? 'text-gray-600' : 'text-gray-400'
           } opacity-40`}
         >
@@ -297,24 +297,24 @@ const CustomDatePicker = ({ value, onChange, label, darkMode }) => {
       </div>
 
       {isOpen && (
-        <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg p-4 ${
+        <div className={`absolute z-50 left-0 mt-1 border rounded-lg shadow-lg p-3 ${
           darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'
-        }`}>
+        }`} style={{ width: '100%' }}>
           {/* Header */}
-          <div className="flex items-center justify-between mb-4 gap-2">
+          <div className="flex items-center justify-between mb-3 gap-1">
             <button
               onClick={handlePrevMonth}
               className={`p-1 rounded hover:bg-opacity-80 transition-colors flex-shrink-0 ${
                 darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-100'
               }`}
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="flex gap-2 flex-1 justify-center">
+            <div className="flex gap-1 flex-1 justify-center">
               <select
                 value={currentMonth.getMonth()}
                 onChange={handleMonthChange}
-                className={`px-2 py-1 rounded border text-sm font-semibold cursor-pointer ${
+                className={`px-1 py-1 rounded border text-xs font-semibold cursor-pointer ${
                   darkMode 
                     ? 'bg-gray-600 border-gray-500 text-gray-100' 
                     : 'bg-white border-gray-300 text-gray-900'
@@ -328,7 +328,7 @@ const CustomDatePicker = ({ value, onChange, label, darkMode }) => {
               <select
                 value={currentMonth.getFullYear()}
                 onChange={handleYearChange}
-                className={`px-2 py-1 rounded border text-sm font-semibold cursor-pointer ${
+                className={`px-1 py-1 rounded border text-xs font-semibold cursor-pointer ${
                   darkMode 
                     ? 'bg-gray-600 border-gray-500 text-gray-100' 
                     : 'bg-white border-gray-300 text-gray-900'
@@ -345,16 +345,16 @@ const CustomDatePicker = ({ value, onChange, label, darkMode }) => {
                 darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-100'
               }`}
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
           {/* Day names */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
+          <div className="grid grid-cols-7 gap-1 mb-1">
             {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
               <div
                 key={day}
-                className={`text-center text-xs font-semibold p-2 ${
+                className={`text-center text-xs font-semibold py-1 ${
                   darkMode ? 'text-gray-400' : 'text-gray-600'
                 }`}
               >
@@ -417,6 +417,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
             placeholder="Select Station"
             darkMode={darkMode}
             label="Station Name"
+            displayFormatter={(value) => value.replace('_', ' - ')}
           />
 
           <SearchableSelect

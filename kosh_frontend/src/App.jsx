@@ -206,7 +206,7 @@ const App = () => {
                 <GraphView data={data} filters={filters} darkMode={darkMode} />
                 {statistics && (
                   <div className="mt-8">
-                    <StatisticsView statistics={statistics} darkMode={darkMode} />
+                    <StatisticsView statistics={statistics} darkMode={darkMode} unit={filters.unit}/>
                   </div>
                 )}
               </div>

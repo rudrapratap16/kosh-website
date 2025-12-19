@@ -308,6 +308,7 @@ client = bigquery.Client(project=PROJECT_ID)
 npdes_table_ref = f"{PROJECT_ID}.{DATASET}.npdes"  # Update with your actual NPDES table name
 weather_table_ref = f"{PROJECT_ID}.{DATASET}.prep_temp_snow"
 
+
 @app.route("/api/filters/initial", methods=["GET"])
 def get_initial_filters():
     """
@@ -317,36 +318,56 @@ def get_initial_filters():
     try:
         query = f"""
         SELECT 
-            -- Station Names from NPDES only
-            (SELECT ARRAY_AGG(DISTINCT station_name IGNORE NULLS ORDER BY station_name) 
-             FROM `{npdes_table_ref}`) as permit_numbers,
+            -- Station Names from NPDES only (combined with permit number)
+            (SELECT ARRAY_AGG(combined_name ORDER BY combined_name) 
+             FROM (
+                SELECT DISTINCT CONCAT(station_name, '_', npdes_permit_number) as combined_name
+                FROM `{npdes_table_ref}` 
+                WHERE station_name IS NOT NULL AND npdes_permit_number IS NOT NULL
+             )) as permit_numbers,
             
             -- Outfalls from NPDES only
-            (SELECT ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) 
-             FROM `{npdes_table_ref}`) as outfalls,
+            (SELECT ARRAY_AGG(outfall ORDER BY outfall) 
+             FROM (
+                SELECT DISTINCT outfall_number as outfall
+                FROM `{npdes_table_ref}`
+                WHERE outfall_number IS NOT NULL
+             )) as outfalls,
             
             -- Parameters from both tables
-            (SELECT ARRAY_AGG(DISTINCT parameter_description IGNORE NULLS ORDER BY parameter_description)
+            (SELECT ARRAY_AGG(param ORDER BY param)
              FROM (
-                SELECT parameter_description FROM `{npdes_table_ref}`
-                UNION DISTINCT
-                SELECT parameter_description FROM `{weather_table_ref}`
+                SELECT DISTINCT parameter_description as param
+                FROM (
+                    SELECT parameter_description FROM `{npdes_table_ref}`
+                    UNION DISTINCT
+                    SELECT parameter_description FROM `{weather_table_ref}`
+                )
+                WHERE parameter_description IS NOT NULL
              )) as parameters,
             
             -- Bases from both tables
-            (SELECT ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base)
+            (SELECT ARRAY_AGG(base_val ORDER BY base_val)
              FROM (
-                SELECT statistical_base FROM `{npdes_table_ref}`
-                UNION DISTINCT
-                SELECT statistical_base FROM `{weather_table_ref}`
+                SELECT DISTINCT statistical_base as base_val
+                FROM (
+                    SELECT statistical_base FROM `{npdes_table_ref}`
+                    UNION DISTINCT
+                    SELECT statistical_base FROM `{weather_table_ref}`
+                )
+                WHERE statistical_base IS NOT NULL
              )) as bases,
             
             -- Units from both tables
-            (SELECT ARRAY_AGG(DISTINCT dmr_value_unit IGNORE NULLS ORDER BY dmr_value_unit)
+            (SELECT ARRAY_AGG(unit_val ORDER BY unit_val)
              FROM (
-                SELECT dmr_value_unit FROM `{npdes_table_ref}`
-                UNION DISTINCT
-                SELECT dmr_value_unit FROM `{weather_table_ref}`
+                SELECT DISTINCT dmr_value_unit as unit_val
+                FROM (
+                    SELECT dmr_value_unit FROM `{npdes_table_ref}`
+                    UNION DISTINCT
+                    SELECT dmr_value_unit FROM `{weather_table_ref}`
+                )
+                WHERE dmr_value_unit IS NOT NULL
              )) as units
         """
         
@@ -384,63 +405,89 @@ def get_cascading_filters():
     """
     try:
         data = request.get_json()
-        permit_number = data.get("permit_number")  # This is actually station_name now
+        permit_number = data.get("permit_number")  # This is now "station_name_npdes_permit_number"
         outfall = data.get("outfall")
         parameter = data.get("parameter")
         base = data.get("base")
         
-        # Build NPDES filters (using station_name instead of npdes_permit_number)
+        # Extract just the station_name part if permit_number contains underscore
+        station_name_for_query = None
+        if permit_number and '_' in permit_number:
+            station_name_for_query = permit_number.rsplit('_', 1)[0]  # Get everything before last underscore
+        elif permit_number:
+            station_name_for_query = permit_number
+        
+        # Build NPDES filters (using station_name)
         npdes_filters = []
-        if permit_number:
-            npdes_filters.append(f"station_name = '{permit_number}'")
+        if station_name_for_query:
+            npdes_filters.append(f"station_name = '{station_name_for_query}'")
         if outfall:
             npdes_filters.append(f"outfall_number = '{outfall}'")
         
         npdes_filter_sql = " AND ".join(npdes_filters) if npdes_filters else "1=1"
         
-        # Station Names: Always all from NPDES
+        # Station Names: Always all from NPDES (combined format)
         permit_numbers_query = f"""
-        SELECT ARRAY_AGG(DISTINCT station_name IGNORE NULLS ORDER BY station_name) as permit_numbers
-        FROM `{npdes_table_ref}`
+        SELECT ARRAY_AGG(combined_name ORDER BY combined_name) as permit_numbers
+        FROM (
+            SELECT DISTINCT CONCAT(station_name, '_', npdes_permit_number) as combined_name
+            FROM `{npdes_table_ref}`
+            WHERE station_name IS NOT NULL AND npdes_permit_number IS NOT NULL
+        )
         """
         
         # Outfalls: Filtered by station name if selected
-        outfalls_filter = f"station_name = '{permit_number}'" if permit_number else "1=1"
+        outfalls_filter = f"station_name = '{station_name_for_query}'" if station_name_for_query else "1=1"
         outfalls_query = f"""
-        SELECT ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) as outfalls
-        FROM `{npdes_table_ref}`
-        WHERE {outfalls_filter}
+        SELECT ARRAY_AGG(outfall ORDER BY outfall) as outfalls
+        FROM (
+            SELECT DISTINCT outfall_number as outfall
+            FROM `{npdes_table_ref}`
+            WHERE {outfalls_filter} AND outfall_number IS NOT NULL
+        )
         """
         
         # Parameters: NPDES (filtered by station/outfall) + Weather (always included)
         parameters_query = f"""
-        SELECT ARRAY_AGG(DISTINCT parameter_description IGNORE NULLS ORDER BY parameter_description) as parameters
+        SELECT ARRAY_AGG(param ORDER BY param) as parameters
         FROM (
-            SELECT parameter_description FROM `{npdes_table_ref}` WHERE {npdes_filter_sql}
-            UNION DISTINCT
-            SELECT parameter_description FROM `{weather_table_ref}`
+            SELECT DISTINCT parameter_description as param
+            FROM (
+                SELECT parameter_description FROM `{npdes_table_ref}` WHERE {npdes_filter_sql}
+                UNION DISTINCT
+                SELECT parameter_description FROM `{weather_table_ref}`
+            )
+            WHERE parameter_description IS NOT NULL
         )
         """
         
         # Bases: Filtered by parameter (from both tables)
         if parameter:
             bases_query = f"""
-            SELECT ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base) as bases
+            SELECT ARRAY_AGG(base_val ORDER BY base_val) as bases
             FROM (
-                SELECT statistical_base FROM `{npdes_table_ref}` 
-                WHERE parameter_description = '{parameter}' AND {npdes_filter_sql}
-                UNION DISTINCT
-                SELECT statistical_base FROM `{weather_table_ref}` 
-                WHERE parameter_description = '{parameter}'
+                SELECT DISTINCT statistical_base as base_val
+                FROM (
+                    SELECT statistical_base FROM `{npdes_table_ref}` 
+                    WHERE parameter_description = '{parameter}' AND {npdes_filter_sql}
+                    UNION DISTINCT
+                    SELECT statistical_base FROM `{weather_table_ref}` 
+                    WHERE parameter_description = '{parameter}'
+                )
+                WHERE statistical_base IS NOT NULL
             )
             """
         else:
             bases_query = f"""
-            SELECT ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base) as bases
+            SELECT ARRAY_AGG(base_val ORDER BY base_val) as bases
             FROM (
-                SELECT statistical_base FROM `{npdes_table_ref}` WHERE {npdes_filter_sql}
-                UNION DISTINCT
-                SELECT statistical_base FROM `{weather_table_ref}`
+                SELECT DISTINCT statistical_base as base_val
+                FROM (
+                    SELECT statistical_base FROM `{npdes_table_ref}` WHERE {npdes_filter_sql}
+                    UNION DISTINCT
+                    SELECT statistical_base FROM `{weather_table_ref}`
+                )
+                WHERE statistical_base IS NOT NULL
             )
             """
         
@@ -455,11 +502,15 @@ def get_cascading_filters():
         npdes_unit_where = f"{unit_where} AND {npdes_filter_sql}"
         
         units_query = f"""
-        SELECT ARRAY_AGG(DISTINCT dmr_value_unit IGNORE NULLS ORDER BY dmr_value_unit) as units
+        SELECT ARRAY_AGG(unit_val ORDER BY unit_val) as units
         FROM (
-            SELECT dmr_value_unit FROM `{npdes_table_ref}` WHERE {npdes_unit_where}
-            UNION DISTINCT
-            SELECT dmr_value_unit FROM `{weather_table_ref}` WHERE {unit_where}
+            SELECT DISTINCT dmr_value_unit as unit_val
+            FROM (
+                SELECT dmr_value_unit FROM `{npdes_table_ref}` WHERE {npdes_unit_where}
+                UNION DISTINCT
+                SELECT dmr_value_unit FROM `{weather_table_ref}` WHERE {unit_where}
+            )
+            WHERE dmr_value_unit IS NOT NULL
         )
         """
         
@@ -506,7 +557,7 @@ def get_combined_data():
     """
     try:
         params = {
-            "permit_number": request.args.get("permit_number"),  # This is station_name now
+            "permit_number": request.args.get("permit_number"),  # This is now "station_name_npdes_permit_number"
             "outfall": request.args.get("outfall"),
             "parameter": request.args.get("parameter"),
             "base": request.args.get("base"),
@@ -516,15 +567,23 @@ def get_combined_data():
             "limit": int(request.args.get("limit", 1000)),
         }
         
+        # Extract station_name from combined format
+        permit_number_param = params.get("permit_number")
+        station_name_for_query = None
+        if permit_number_param and '_' in permit_number_param:
+            station_name_for_query = permit_number_param.rsplit('_', 1)[0]  # Get everything before last underscore
+        elif permit_number_param:
+            station_name_for_query = permit_number_param
+        
         # Build NPDES filters (using station_name)
         npdes_where = []
         weather_where = []
         query_params = []
         
         # NPDES filters
-        if params.get("permit_number"):
+        if station_name_for_query:
             npdes_where.append("station_name = @permit_number")
-            query_params.append(bigquery.ScalarQueryParameter("permit_number", "STRING", params["permit_number"]))
+            query_params.append(bigquery.ScalarQueryParameter("permit_number", "STRING", station_name_for_query))
         
         if params.get("outfall"):
             npdes_where.append("outfall_number = @outfall")
@@ -659,7 +718,7 @@ def get_combined_statistics():
     """
     try:
         params = {
-            "permit_number": request.args.get("permit_number"),  # This is station_name now
+            "permit_number": request.args.get("permit_number"),  # This is now "station_name_npdes_permit_number"
             "outfall": request.args.get("outfall"),
             "parameter": request.args.get("parameter"),
             "base": request.args.get("base"),
@@ -668,14 +727,22 @@ def get_combined_statistics():
             "end_date": request.args.get("end_date"),
         }
         
+        # Extract station_name from combined format
+        permit_number_param = params.get("permit_number")
+        station_name_for_query = None
+        if permit_number_param and '_' in permit_number_param:
+            station_name_for_query = permit_number_param.rsplit('_', 1)[0]  # Get everything before last underscore
+        elif permit_number_param:
+            station_name_for_query = permit_number_param
+        
         # Build filters (same logic as combined data, using station_name)
         npdes_where = []
         weather_where = []
         query_params = []
         
-        if params.get("permit_number"):
+        if station_name_for_query:
             npdes_where.append("station_name = @permit_number")
-            query_params.append(bigquery.ScalarQueryParameter("permit_number", "STRING", params["permit_number"]))
+            query_params.append(bigquery.ScalarQueryParameter("permit_number", "STRING", station_name_for_query))
         
         if params.get("outfall"):
             npdes_where.append("outfall_number = @outfall")

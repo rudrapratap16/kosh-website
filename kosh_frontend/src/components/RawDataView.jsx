@@ -81,7 +81,7 @@ const RawDataView = ({ data, darkMode, filters }) => {
           limit_set_designator: row.limit_set_designator || '',
           parameter_code: row.parameter_code || '',
           parameter_description: row.parameter_description || '',
-          monitoring_period_date: row.monitoring_period_date || '',
+          monitoring_period_date: row.date || '',
           limit_value: row.limit_value || '',
           limit_value_unit: row.limit_value_unit || '',
           dmr_value_type: row.dmr_value_type || '',
@@ -254,6 +254,7 @@ const RawDataView = ({ data, darkMode, filters }) => {
             <tbody className={`divide-y ${darkMode ? 'bg-gray-800 divide-gray-700' : 'bg-white divide-gray-200'}`}>
               {data.map((row, idx) => (
                 <tr key={idx} className={darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}>
+                  
                   <td className={`px-4 py-3 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
                     {row.npdes_permit_number || '-'}
                   </td>
@@ -273,7 +274,7 @@ const RawDataView = ({ data, darkMode, filters }) => {
                     {row.parameter_description || '-'}
                   </td>
                   <td className={`px-4 py-3 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
-                    {row.monitoring_period_date || '-'}
+                    {row.date || '-'}
                   </td>
                   <td className={`px-4 py-3 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
                     {row.limit_value || '-'}
