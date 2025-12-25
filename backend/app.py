@@ -16,12 +16,16 @@ app = Flask(__name__)
 CORS(app, 
      origins=[
          "https://kosh-frontend-react-569071530463.europe-west1.run.app",
-         "http://localhost:5173"
+         "http://localhost:5173",
+         "http://127.0.0.1:5173",
+         "http://localhost:8080",
+         "http://127.0.0.1:8080",
      ],
      allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     methods=["GET", "POST", "PUT", "DELETE"],
      supports_credentials=True,
      max_age=3600)
+
 
 JWT_SECRET = os.environ.get('JWT_SECRET')
 JWT_ALGORITHM = 'HS256'
@@ -114,29 +118,9 @@ def require_auth(f):
     
     return decorated_function
 
-# Global after_request handler to ensure CORS headers are always present
-@app.after_request
-def after_request(response):
-    origin = request.headers.get('Origin')
-    
-    # List of allowed origins
-    allowed_origins = [
-        'https://kosh-frontend-react-569071530463.europe-west1.run.app',
-        'http://localhost:5173'
-    ]
-    
-    if origin in allowed_origins:
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response.headers['Access-Control-Max-Age'] = '3600'
-    
-    return response
-
 # ============= AUTH ROUTES =============
 
-@app.route("/api/auth/google", methods=["POST", "OPTIONS"])
+@app.route("/api/auth/google", methods=["POST"])
 def google_auth():
     """
     Verify Google OAuth token and return JWT
@@ -190,7 +174,7 @@ def google_auth():
         traceback.print_exc()
         return jsonify({'error': f'Authentication failed: {str(e)}'}), 500
 
-@app.route("/api/auth/verify", methods=["GET", "OPTIONS"])
+@app.route("/api/auth/verify", methods=["GET"])
 @require_auth
 def verify_token():
     """Verify if current JWT token is valid"""
@@ -202,7 +186,7 @@ def verify_token():
         'user': request.user
     }), 200
 
-@app.route("/api/admin/users", methods=["GET", "OPTIONS"])
+@app.route("/api/admin/users", methods=["GET"])
 @require_auth
 def get_all_users():
     """Get all users from Firestore"""
@@ -231,7 +215,7 @@ def get_all_users():
         print(f"Error fetching users: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route("/api/filters/initial", methods=["GET", "OPTIONS"])
+@app.route("/api/filters/initial", methods=["GET"])
 @require_auth
 def get_initial_filters():
     """
@@ -322,7 +306,7 @@ def get_initial_filters():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/filters/cascading", methods=["POST", "OPTIONS"])
+@app.route("/api/filters/cascading", methods=["POST"])
 @require_auth
 def get_cascading_filters():
     """
@@ -477,7 +461,7 @@ def get_cascading_filters():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/data/combined", methods=["GET", "OPTIONS"])
+@app.route("/api/data/combined", methods=["GET"])
 @require_auth
 def get_combined_data():
     """
@@ -642,7 +626,7 @@ def get_combined_data():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/data/statistics/combined", methods=["GET", "OPTIONS"])
+@app.route("/api/data/statistics/combined", methods=["GET"])
 @require_auth
 def get_combined_statistics():
     """
