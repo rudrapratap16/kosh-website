@@ -15,15 +15,17 @@ app = Flask(__name__)
 
 CORS(
     app,
-    supports_credentials=True,
     resources={
-        r"/*": {
+        r"/api/*": {
             "origins": [
                 "https://kosh-frontend-react-569071530463.europe-west1.run.app",
                 "http://localhost:5173",
             ],
-            "methods": ["GET", "POST", "OPTIONS"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True,
+            "max_age": 3600  # Cache preflight for 1 hour
         }
     }
 )
@@ -132,6 +134,19 @@ def require_auth(f):
 
 # ============= AUTH ROUTES =============
 
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin in [
+        'https://kosh-frontend-react-569071530463.europe-west1.run.app',
+        'http://localhost:5173'
+    ]:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
+
 @app.route("/api/auth/google", methods=["POST", "OPTIONS"])
 def google_auth():
     """
@@ -139,6 +154,15 @@ def google_auth():
     Expects: { "token": "google_id_token" }
     Returns: { "token": "jwt_token", "user": {...} }
     """
+    # Handle preflight OPTIONS request
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "POST,OPTIONS")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response, 200
+    
     try:
         data = request.get_json()
         google_token = data.get('token')
@@ -146,18 +170,17 @@ def google_auth():
         if not google_token:
             return jsonify({'error': 'No token provided'}), 400
         
-        print(f"Received token: {google_token[:50]}...")  # Debug log
-        print(f"Using Client ID: {GOOGLE_CLIENT_ID}")  # Debug log
+        print(f"Received token: {google_token[:50]}...")
+        print(f"Using Client ID: {GOOGLE_CLIENT_ID}")
         
         # Verify Google token
-        # Note: If GOOGLE_CLIENT_ID is not set, this will fail
         idinfo = id_token.verify_oauth2_token(
             google_token, 
             google_requests.Request(), 
             GOOGLE_CLIENT_ID
         )
         
-        print(f"Token verified successfully for: {idinfo.get('email')}")  # Debug log
+        print(f"Token verified successfully for: {idinfo.get('email')}")
         
         # Extract user information
         user_info = {
@@ -173,13 +196,18 @@ def google_auth():
         # Create our own JWT token
         jwt_token = create_jwt_token(user_info)
         
-        return jsonify({
+        response = jsonify({
             'token': jwt_token,
             'user': user_info
-        }), 200
+        })
+        
+        # Explicitly set CORS headers in response
+        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        
+        return response, 200
         
     except ValueError as e:
-        # Invalid token
         print(f"ValueError in google_auth: {str(e)}")
         return jsonify({'error': f'Invalid Google token: {str(e)}'}), 401
     except Exception as e:

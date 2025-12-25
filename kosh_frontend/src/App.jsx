@@ -15,6 +15,8 @@ import {
 } from './apis.js';
 
 const GOOGLE_CLIENT_ID = '569071530463-tmc25vftuc18maava7vdg1f6v56nk61t.apps.googleusercontent.com'; // Replace with your actual Google Client ID
+const BACKEND_URL = 'https://kosh-backend-569071530463.europe-west1.run.app';
+// const BACKEND_URL = 'http://localhost:8080';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -75,7 +77,7 @@ const App = () => {
       if (token && userInfo) {
         try {
           // Verify token with backend
-          const response = await fetch('http://localhost:8080/api/auth/verify', {
+          const response = await fetch(`${BACKEND_URL}/api/auth/verify`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
