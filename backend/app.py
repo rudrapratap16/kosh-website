@@ -132,11 +132,6 @@ def require_auth(f):
 
 # ============= AUTH ROUTES =============
 
-@app.before_request
-def handle_options():
-    if request.method == "OPTIONS":
-        return "", 204
-
 @app.route("/api/auth/google", methods=["POST", "OPTIONS"])
 def google_auth():
     """
