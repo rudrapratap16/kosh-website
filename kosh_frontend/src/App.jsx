@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Sun, Moon } from 'lucide-react';
+import LoginPage from './components/LoginPage';
 import FilterBar from './components/FilterBar';
 import TabBar from './components/TabBar';
 import GraphView from './components/GraphView';
@@ -12,7 +14,12 @@ import {
   fetchCombinedStatistics
 } from './apis.js';
 
+const GOOGLE_CLIENT_ID = '569071530463-tmc25vftuc18maava7vdg1f6v56nk61t.apps.googleusercontent.com'; // Replace with your actual Google Client ID
+
 const App = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
 
   // Helper function to format date as YYYY-MM-DD
@@ -52,19 +59,58 @@ const App = () => {
     units: []
   });
 
-  
   const [activeTab, setActiveTab] = useState('graph');
   const [data, setData] = useState([]);
-  const [allFacilityData, setAllFacilityData] = useState([]); // NEW: Store all facility data
+  const [allFacilityData, setAllFacilityData] = useState([]);
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Check if user is already logged in on mount
   useEffect(() => {
-    loadInitialFilters();
+    const checkAuth = async () => {
+      const token = localStorage.getItem('jwt_token');
+      const userInfo = localStorage.getItem('user_info');
+      
+      if (token && userInfo) {
+        try {
+          // Verify token with backend
+          const response = await fetch('http://localhost:8080/api/auth/verify', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            setUser(JSON.parse(userInfo));
+            setIsAuthenticated(true);
+          } else {
+            // Token invalid, clear storage
+            localStorage.removeItem('jwt_token');
+            localStorage.removeItem('user_info');
+          }
+        } catch (error) {
+          console.error('Auth check failed:', error);
+          localStorage.removeItem('jwt_token');
+          localStorage.removeItem('user_info');
+        }
+      }
+      
+      setAuthLoading(false);
+    };
+
+    checkAuth();
   }, []);
 
   useEffect(() => {
+    if (isAuthenticated) {
+      loadInitialFilters();
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
     const allFiltersSelected = filters.parameter && 
                                filters.base && 
                                filters.unit &&
@@ -74,7 +120,19 @@ const App = () => {
     if (allFiltersSelected) {
       handleApplyFilters();
     }
-  }, [filters]);
+  }, [filters, isAuthenticated]);
+
+  const handleLogin = (userInfo) => {
+    setUser(userInfo);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('jwt_token');
+    localStorage.removeItem('user_info');
+    setUser(null);
+    setIsAuthenticated(false);
+  };
 
   const loadInitialFilters = async () => {
     try {
@@ -83,6 +141,10 @@ const App = () => {
       setOptions(data);
     } catch (error) {
       console.error('Error fetching initial filters:', error);
+      // If 401, logout user
+      if (error.message.includes('401')) {
+        handleLogout();
+      }
     }
   };
 
@@ -121,6 +183,9 @@ const App = () => {
       setOptions(cascadingData);
     } catch (error) {
       console.error('Error fetching cascading filters:', error);
+      if (error.message.includes('401')) {
+        handleLogout();
+      }
     }
   };
 
@@ -136,13 +201,12 @@ const App = () => {
       setData(dataResult.data || []);
       setStatistics(statsResult);
       
-      // NEW: Fetch all facility data (only permit_number, outfall, and date range)
+      // Fetch all facility data (only permit_number, outfall, and date range)
       const facilityFilters = {
         permit_number: filters.permit_number,
         outfall: filters.outfall,
         startDate: filters.startDate,
         endDate: filters.endDate
-        // Intentionally exclude parameter, base, and unit
       };
       
       const allDataResult = await fetchCombinedData(facilityFilters);
@@ -153,11 +217,36 @@ const App = () => {
       setData([]);
       setAllFacilityData([]);
       setStatistics(null);
+      if (error.message.includes('401')) {
+        handleLogout();
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // Show loading spinner while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <LoginPage onLogin={handleLogin} />
+      </GoogleOAuthProvider>
+    );
+  }
+
+  // Show main dashboard if authenticated
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <FilterBar
@@ -176,6 +265,28 @@ const App = () => {
         className="transition-all duration-300 p-6" 
         style={{ marginLeft: sidebarCollapsed ? '48px' : '320px' }}
       >
+        {/* Top bar with user info and dark mode toggle */}
+        <div className="flex justify-between items-center mb-4">
+          <div className={`flex items-center gap-3 ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+            {user?.picture && (
+              <img 
+                src={user.picture} 
+                alt={user.name} 
+                className="w-8 h-8 rounded-full"
+              />
+            )}
+            <span className="text-sm">{user?.name}</span>
+            <button
+              onClick={handleLogout}
+              className={`text-sm px-3 py-1 rounded hover:bg-opacity-80 ${
+                darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+
         {/* Dark Mode Toggle Button */}
         <button
           onClick={() => setDarkMode(!darkMode)}

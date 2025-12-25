@@ -1,19 +1,45 @@
 const API_BASE = 'https://kosh-backend-569071530463.europe-west1.run.app';
 // const API_BASE = 'http://127.0.0.1:8080';
 
+// Helper function to get JWT token from localStorage
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('jwt_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
+
+// Helper function to handle API responses
+const handleResponse = async (response) => {
+  if (!response.ok) {
+    if (response.status === 401) {
+      // Token expired or invalid
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('user_info');
+      throw new Error('401: Authentication required');
+    }
+    const error = await response.json().catch(() => ({ error: 'Request failed' }));
+    throw new Error(error.error || 'API request failed');
+  }
+  return response.json();
+};
+
 // Filter APIs - Now include NPDES permit number, outfalls, and Weather data
 export const fetchInitialFilters = async () => {
-  const response = await fetch(`${API_BASE}/api/filters/initial`);
-  return response.json();
+  const response = await fetch(`${API_BASE}/api/filters/initial`, {
+    headers: getAuthHeaders()
+  });
+  return handleResponse(response);
 };
 
 export const fetchCascadingFilters = async (filters) => {
   const response = await fetch(`${API_BASE}/api/filters/cascading`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(filters)
   });
-  return response.json();
+  return handleResponse(response);
 };
 
 // Legacy NPDES-only endpoints (keep for backward compatibility if needed)
@@ -27,8 +53,10 @@ export const fetchData = async (filters) => {
   if (filters.startDate) params.append('start_date', filters.startDate);
   if (filters.endDate) params.append('end_date', filters.endDate);
 
-  const response = await fetch(`${API_BASE}/data?${params}`);
-  return response.json();
+  const response = await fetch(`${API_BASE}/data?${params}`, {
+    headers: getAuthHeaders()
+  });
+  return handleResponse(response);
 };
 
 export const fetchStatistics = async (filters) => {
@@ -41,8 +69,10 @@ export const fetchStatistics = async (filters) => {
   if (filters.startDate) params.append('start_date', filters.startDate);
   if (filters.endDate) params.append('end_date', filters.endDate);
 
-  const response = await fetch(`${API_BASE}/api/data/statistics?${params}`);
-  return response.json();
+  const response = await fetch(`${API_BASE}/api/data/statistics?${params}`, {
+    headers: getAuthHeaders()
+  });
+  return handleResponse(response);
 };
 
 // Combined NPDES + Weather endpoints
@@ -57,8 +87,10 @@ export const fetchCombinedData = async (filters) => {
   if (filters.endDate) params.append('end_date', filters.endDate);
   if (filters.limit) params.append('limit', filters.limit);
 
-  const response = await fetch(`${API_BASE}/api/data/combined?${params}`);
-  return response.json();
+  const response = await fetch(`${API_BASE}/api/data/combined?${params}`, {
+    headers: getAuthHeaders()
+  });
+  return handleResponse(response);
 };
 
 export const fetchCombinedStatistics = async (filters) => {
@@ -71,6 +103,8 @@ export const fetchCombinedStatistics = async (filters) => {
   if (filters.startDate) params.append('start_date', filters.startDate);
   if (filters.endDate) params.append('end_date', filters.endDate);
 
-  const response = await fetch(`${API_BASE}/api/data/statistics/combined?${params}`);
-  return response.json();
+  const response = await fetch(`${API_BASE}/api/data/statistics/combined?${params}`, {
+    headers: getAuthHeaders()
+  });
+  return handleResponse(response);
 };

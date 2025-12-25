@@ -1,6 +1,13 @@
 from flask import Flask, jsonify, request
-from services.bigquery_service import fetch_data, fetch_filters
 from flask_cors import CORS
+from google.cloud import bigquery
+from google.cloud import firestore
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+import jwt
+import datetime
+from functools import wraps
+from config import PROJECT_ID, DATASET
 import os
 
 # Create Flask app at top level
@@ -9,307 +16,209 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://kosh-frontend-react-569071530463.europe-west1.run.app"}})
 # CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
 
-# @app.route("/filters", methods=["GET"])
-# def get_filters():
-#     """Returns unique values for dropdowns"""
-#     try:
-#         filters = fetch_filters()
-#         return jsonify(filters), 200
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
+JWT_SECRET = os.environ.get('JWT_SECRET')
+JWT_ALGORITHM = 'HS256'
+JWT_EXP_HOURS = 24
 
-# @app.route("/data", methods=["GET"])
-# def get_data():
-#     """
-#     Query params (all optional):
-#     outfall, parameter, base, unit, start_date, end_date, limit
-#     """
-#     try:
-#         params = {
-#             "outfall": request.args.get("outfall"),
-#             "parameter": request.args.get("parameter"),
-#             "base": request.args.get("base"),
-#             "unit": request.args.get("unit"),
-#             "start_date": request.args.get("start_date"),
-#             "end_date": request.args.get("end_date"),
-#             "limit": int(request.args.get("limit", 1000)),
-#         }
-#         results = fetch_data(params)
-#         return jsonify({"data": results}), 200
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-# @app.route("/data/by-outfall", methods=["GET"])
-# def get_data_by_outfall():
-#     print('sdofnsogfn')
-#     """Get all data for a specific outfall (no other filters)"""
-#     try:
-#         outfall = request.args.get("outfall")
-#         if not outfall:
-#             return jsonify({"error": "outfall parameter required"}), 400
-        
-#         limit = int(request.args.get("limit", 10000))
-#         results = fetch_data({"outfall": outfall, "limit": limit})
-#         return jsonify({"data": results}), 200
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-# # Optional: health check
-# @app.route("/health", methods=["GET"])
-# def health():
-#     return "okay, this route works", 200
-
-# from services.bigquery_service import (
-#     fetch_weather_data, fetch_weather_filters
-# )
-
-# @app.route("/weather/filters", methods=["GET"])
-# def get_weather_filters():
-#     """Returns unique weather dropdown values"""
-#     try:
-#         filters = fetch_weather_filters()
-#         return jsonify(filters), 200
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-# @app.route("/weather/data", methods=["GET"])
-# def get_weather_data():
-#     """Fetch weather data based on filters"""
-#     try:
-#         params = {
-#             "station_id": request.args.get("station_id"),
-#             "parent_facility_id": request.args.get("parent_facility_id"),
-#             "start_date": request.args.get("start_date"),
-#             "end_date": request.args.get("end_date"),
-#             "limit": int(request.args.get("limit", 1000)),
-#         }
-#         results = fetch_weather_data(params)
-#         return jsonify({"data": results}), 200
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-# from google.cloud import bigquery
-# from config import PROJECT_ID, DATASET, TABLE
-
-# client = bigquery.Client(project=PROJECT_ID)
-# table_ref = f"{PROJECT_ID}.{DATASET}.{TABLE}"
-
-# @app.route("/api/filters/initial", methods=["GET"])
-# def get_initial_filters():
-#     """
-#     Get all unique values for dropdowns on initial load
-#     """
-#     try:
-#         query = f"""
-#         SELECT 
-#             ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) as outfalls,
-#             ARRAY_AGG(DISTINCT parameter_description IGNORE NULLS ORDER BY parameter_description) as parameters,
-#             ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base) as bases,
-#             ARRAY_AGG(DISTINCT dmr_value_unit IGNORE NULLS ORDER BY dmr_value_unit) as units
-#         FROM `{table_ref}`
-#         """
-        
-#         query_job = client.query(query)
-#         results = list(query_job.result())
-        
-#         if results:
-#             row = results[0]
-#             return jsonify({
-#                 "outfalls": row.outfalls or [],
-#                 "parameters": row.parameters or [],
-#                 "bases": row.bases or [],
-#                 "units": row.units or []
-#             }), 200
-        
-#         return jsonify({
-#             "outfalls": [],
-#             "parameters": [],
-#             "bases": [],
-#             "units": []
-#         }), 200
-        
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-
-# @app.route("/api/filters/cascading", methods=["POST"])
-# def get_cascading_filters():
-#     """
-#     Cascading filters with no lock-in:
-#     - Outfalls: Always ALL
-#     - Parameters: Filtered by outfall only
-#     - Bases: Filtered by outfall + parameter (excluding base itself)
-#     - Units: Filtered by outfall + parameter + base (excluding unit itself)
-#     """
-#     try:
-#         data = request.get_json()
-#         outfall = data.get("outfall")
-#         parameter = data.get("parameter")
-#         base = data.get("base")
-#         unit = data.get("unit")
-        
-#         # Build WHERE clauses for each dropdown
-#         # Parameters: use only outfall
-#         where_parameters = f"outfall_number = '{outfall}'" if outfall else "1=1"
-        
-#         # Bases: use outfall + parameter (but not base itself)
-#         clauses_bases = []
-#         if outfall:
-#             clauses_bases.append(f"outfall_number = '{outfall}'")
-#         if parameter:
-#             clauses_bases.append(f"parameter_description = '{parameter}'")
-#         where_bases = " AND ".join(clauses_bases) if clauses_bases else "1=1"
-        
-#         # Units: use outfall + parameter + base (but not unit itself)
-#         clauses_units = []
-#         if outfall:
-#             clauses_units.append(f"outfall_number = '{outfall}'")
-#         if parameter:
-#             clauses_units.append(f"parameter_description = '{parameter}'")
-#         if base:
-#             clauses_units.append(f"statistical_base = '{base}'")
-#         where_units = " AND ".join(clauses_units) if clauses_units else "1=1"
-        
-#         query = f"""
-#         SELECT 
-#             (SELECT ARRAY_AGG(DISTINCT outfall_number IGNORE NULLS ORDER BY outfall_number) 
-#              FROM `{table_ref}`) as outfalls,
-#             (SELECT ARRAY_AGG(DISTINCT parameter_description IGNORE NULLS ORDER BY parameter_description) 
-#              FROM `{table_ref}` WHERE {where_parameters}) as parameters,
-#             (SELECT ARRAY_AGG(DISTINCT statistical_base IGNORE NULLS ORDER BY statistical_base) 
-#              FROM `{table_ref}` WHERE {where_bases}) as bases,
-#             (SELECT ARRAY_AGG(DISTINCT dmr_value_unit IGNORE NULLS ORDER BY dmr_value_unit) 
-#              FROM `{table_ref}` WHERE {where_units}) as units
-#         """
-        
-#         query_job = client.query(query)
-#         results = list(query_job.result())
-        
-#         if results:
-#             row = results[0]
-#             return jsonify({
-#                 "outfalls": row.outfalls or [],
-#                 "parameters": row.parameters or [],
-#                 "bases": row.bases or [],
-#                 "units": row.units or []
-#             }), 200
-        
-#         return jsonify({
-#             "outfalls": [],
-#             "parameters": [],
-#             "bases": [],
-#             "units": []
-#         }), 200
-        
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-
-# @app.route("/api/data/statistics", methods=["GET"])
-# def get_statistics():
-#     """
-#     Get statistical summary for selected filters
-#     Query params: outfall, parameter, base, unit, start_date, end_date
-#     """
-#     try:
-#         params = {
-#             "outfall": request.args.get("outfall"),
-#             "parameter": request.args.get("parameter"),
-#             "base": request.args.get("base"),
-#             "unit": request.args.get("unit"),
-#             "start_date": request.args.get("start_date"),
-#             "end_date": request.args.get("end_date"),
-#         }
-        
-#         # Build WHERE clause
-#         where_clauses = ["dmr_value IS NOT NULL", "dmr_value != ''"]
-        
-#         if params["outfall"]:
-#             where_clauses.append(f"TRIM(outfall_number) = '{params['outfall']}'")
-#         if params["parameter"]:
-#             param_escaped = params['parameter'].replace("'", "\\'")
-#             where_clauses.append(f"TRIM(parameter_description) = '{param_escaped}'")
-#         if params["base"]:
-#             where_clauses.append(f"TRIM(statistical_base) = '{params['base']}'")
-#         if params["unit"]:
-#             where_clauses.append(f"TRIM(dmr_value_unit) = '{params['unit']}'")
-#         if params["start_date"]:
-#             # Parse STRING date with MM/DD/YYYY format
-#             where_clauses.append(f"PARSE_DATE('%m/%d/%Y', monitoring_period_date) >= PARSE_DATE('%Y-%m-%d', '{params['start_date']}')")
-#         if params["end_date"]:
-#             where_clauses.append(f"PARSE_DATE('%m/%d/%Y', monitoring_period_date) <= PARSE_DATE('%Y-%m-%d', '{params['end_date']}')")
-        
-#         where_clause = " AND ".join(where_clauses)
-        
-#         query = f"""
-#         WITH stats_data AS (
-#             SELECT 
-#                 SAFE_CAST(dmr_value AS FLOAT64) as value
-#             FROM `{table_ref}`
-#             WHERE {where_clause}
-#                 AND SAFE_CAST(dmr_value AS FLOAT64) IS NOT NULL
-#         ),
-#         basic_stats AS (
-#             SELECT 
-#                 COUNT(*) as count,
-#                 AVG(value) as mean,
-#                 STDDEV(value) as std_dev,
-#                 VAR_POP(value) as variance,
-#                 MIN(value) as min_value,
-#                 MAX(value) as max_value,
-#                 APPROX_QUANTILES(value, 4)[OFFSET(2)] as median
-#             FROM stats_data
-#         ),
-#         moment_stats AS (
-#             SELECT
-#                 AVG(POW((value - (SELECT mean FROM basic_stats)) / NULLIF((SELECT std_dev FROM basic_stats), 0), 3)) as skewness,
-#                 AVG(POW((value - (SELECT mean FROM basic_stats)) / NULLIF((SELECT std_dev FROM basic_stats), 0), 4)) - 3 as kurtosis
-#             FROM stats_data
-#             WHERE (SELECT std_dev FROM basic_stats) > 0
-#         )
-#         SELECT 
-#             b.*,
-#             m.skewness,
-#             m.kurtosis
-#         FROM basic_stats b
-#         CROSS JOIN moment_stats m
-#         """
-        
-#         print(f"Executing query with WHERE: {where_clause}")
-#         query_job = client.query(query)
-#         results = list(query_job.result())
-#         print(f"Results: {results}")
-        
-#         if results and results[0].count > 0:
-#             row = results[0]
-#             return jsonify({
-#                 "count": row.count,
-#                 "mean": row.mean,
-#                 "std_dev": row.std_dev,
-#                 "variance": row.variance,
-#                 "min": row.min_value,
-#                 "max": row.max_value,
-#                 "median": row.median,
-#                 "skewness": row.skewness,
-#                 "kurtosis": row.kurtosis
-#             }), 200
-        
-#         return jsonify({"error": "No data found for the specified filters"}), 404
-        
-#     except Exception as e:
-#         print(f"Error: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
-
-from google.cloud import bigquery
-from flask import request, jsonify
-from config import PROJECT_ID, DATASET
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+FIRESTORE_DATABASE = os.environ.get('FIRESTORE_DATABASE')
+db = firestore.Client(project=PROJECT_ID, database=FIRESTORE_DATABASE)
 
 client = bigquery.Client(project=PROJECT_ID)
 npdes_table_ref = f"{PROJECT_ID}.{DATASET}.npdes"  # Update with your actual NPDES table name
 weather_table_ref = f"{PROJECT_ID}.{DATASET}.prep_temp_snow"
 
+def save_user_to_firestore(user_info):
+    """Save or update user information in Firestore"""
+    try:
+        users_ref = db.collection('users')
+        user_doc_ref = users_ref.document(user_info['sub'])  # Use Google user ID as document ID
+        
+        # Check if user exists
+        user_doc = user_doc_ref.get()
+        
+        if user_doc.exists:
+            # Update existing user
+            user_doc_ref.update({
+                'email': user_info['email'],
+                'name': user_info['name'],
+                'picture': user_info['picture'],
+                'last_login': firestore.SERVER_TIMESTAMP
+            })
+            print(f"✓ Updated existing user: {user_info['email']}")
+        else:
+            # Create new user
+            user_doc_ref.set({
+                'email': user_info['email'],
+                'name': user_info['name'],
+                'picture': user_info['picture'],
+                'google_id': user_info['sub'],
+                'created_at': firestore.SERVER_TIMESTAMP,
+                'last_login': firestore.SERVER_TIMESTAMP
+            })
+            print(f"✓ Created new user: {user_info['email']}")
+            
+    except Exception as e:
+        print(f"⚠ Warning: Could not save user to Firestore: {str(e)}")
+        print(f"⚠ User can still use the app, but won't be tracked.")
+        # Don't fail login if Firestore fails
+        pass
+
+def create_jwt_token(user_info):
+    """Create JWT token with user information"""
+    payload = {
+        'email': user_info['email'],
+        'name': user_info.get('name', ''),
+        'picture': user_info.get('picture', ''),
+        'sub': user_info['sub'],  # Google user ID
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=JWT_EXP_HOURS),
+        'iat': datetime.datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def verify_jwt_token(token):
+    """Verify JWT token and return payload"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+def require_auth(f):
+    """Decorator to protect routes with JWT authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        
+        if not auth_header:
+            return jsonify({'error': 'No authorization header'}), 401
+        
+        try:
+            # Expected format: "Bearer <token>"
+            token = auth_header.split(' ')[1]
+            payload = verify_jwt_token(token)
+            
+            if not payload:
+                return jsonify({'error': 'Invalid or expired token'}), 401
+            
+            # Add user info to request context
+            request.user = payload
+            return f(*args, **kwargs)
+            
+        except IndexError:
+            return jsonify({'error': 'Invalid authorization header format'}), 401
+        except Exception as e:
+            return jsonify({'error': str(e)}), 401
+    
+    return decorated_function
+
+# ============= AUTH ROUTES =============
+
+@app.route("/api/auth/google", methods=["POST"])
+def google_auth():
+    """
+    Verify Google OAuth token and return JWT
+    Expects: { "token": "google_id_token" }
+    Returns: { "token": "jwt_token", "user": {...} }
+    """
+    try:
+        data = request.get_json()
+        google_token = data.get('token')
+        
+        if not google_token:
+            return jsonify({'error': 'No token provided'}), 400
+        
+        print(f"Received token: {google_token[:50]}...")  # Debug log
+        print(f"Using Client ID: {GOOGLE_CLIENT_ID}")  # Debug log
+        
+        # Verify Google token
+        # Note: If GOOGLE_CLIENT_ID is not set, this will fail
+        idinfo = id_token.verify_oauth2_token(
+            google_token, 
+            google_requests.Request(), 
+            GOOGLE_CLIENT_ID
+        )
+        
+        print(f"Token verified successfully for: {idinfo.get('email')}")  # Debug log
+        
+        # Extract user information
+        user_info = {
+            'email': idinfo['email'],
+            'name': idinfo.get('name', ''),
+            'picture': idinfo.get('picture', ''),
+            'sub': idinfo['sub']
+        }
+        
+        # Save user to Firestore
+        save_user_to_firestore(user_info)
+        
+        # Create our own JWT token
+        jwt_token = create_jwt_token(user_info)
+        
+        return jsonify({
+            'token': jwt_token,
+            'user': user_info
+        }), 200
+        
+    except ValueError as e:
+        # Invalid token
+        print(f"ValueError in google_auth: {str(e)}")
+        return jsonify({'error': f'Invalid Google token: {str(e)}'}), 401
+    except Exception as e:
+        print(f"Exception in google_auth: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Authentication failed: {str(e)}'}), 500
+
+@app.route("/api/auth/verify", methods=["GET"])
+@require_auth
+def verify_token():
+    """
+    Verify if current JWT token is valid
+    Returns user info if valid
+    """
+    return jsonify({
+        'valid': True,
+        'user': request.user
+    }), 200
+
+@app.route("/api/admin/users", methods=["GET"])
+@require_auth
+def get_all_users():
+    """
+    Get all users from Firestore
+    (In production, you'd want to add admin-only access control here)
+    """
+    try:
+        users_ref = db.collection('users')
+        users = users_ref.stream()
+        
+        user_list = []
+        for user in users:
+            user_data = user.to_dict()
+            # Convert Firestore timestamps to strings for JSON serialization
+            if 'created_at' in user_data and user_data['created_at']:
+                user_data['created_at'] = user_data['created_at'].isoformat()
+            if 'last_login' in user_data and user_data['last_login']:
+                user_data['last_login'] = user_data['last_login'].isoformat()
+            user_list.append(user_data)
+        
+        return jsonify({
+            'users': user_list,
+            'total': len(user_list)
+        }), 200
+        
+    except Exception as e:
+        print(f"Error fetching users: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 
 @app.route("/api/filters/initial", methods=["GET"])
+@require_auth
 def get_initial_filters():
     """
     Get all unique values for dropdowns on initial load
@@ -398,6 +307,7 @@ def get_initial_filters():
 
 
 @app.route("/api/filters/cascading", methods=["POST"])
+@require_auth
 def get_cascading_filters():
     """
     Cascading filters that include both NPDES and Weather data
@@ -550,6 +460,7 @@ def get_cascading_filters():
 
 
 @app.route("/api/data/combined", methods=["GET"])
+@require_auth
 def get_combined_data():
     """
     Fetches data from both NPDES and Weather tables
@@ -712,6 +623,7 @@ def get_combined_data():
 
 
 @app.route("/api/data/statistics/combined", methods=["GET"])
+@require_auth
 def get_combined_statistics():
     """
     Get statistics for combined NPDES and Weather data
