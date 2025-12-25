@@ -13,25 +13,15 @@ import os
 # Create Flask app at top level
 app = Flask(__name__)
 
-CORS(
-    app,
-    resources={
-        r"/api/*": {
-            "origins": [
-                "https://kosh-frontend-react-569071530463.europe-west1.run.app",
-                "http://localhost:5173",
-            ],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "expose_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True,
-            "max_age": 3600  # Cache preflight for 1 hour
-        }
-    }
-)
-
-# CORS(app, resources={r"/*": {"origins": "https://kosh-frontend-react-569071530463.europe-west1.run.app"}})
-# CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
+CORS(app, 
+     origins=[
+         "https://kosh-frontend-react-569071530463.europe-west1.run.app",
+         "http://localhost:5173"
+     ],
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=True,
+     max_age=3600)
 
 JWT_SECRET = os.environ.get('JWT_SECRET')
 JWT_ALGORITHM = 'HS256'
@@ -43,20 +33,17 @@ FIRESTORE_DATABASE = os.environ.get('FIRESTORE_DATABASE')
 db = firestore.Client(project=PROJECT_ID, database=FIRESTORE_DATABASE)
 
 client = bigquery.Client(project=PROJECT_ID)
-npdes_table_ref = f"{PROJECT_ID}.{DATASET}.npdes"  # Update with your actual NPDES table name
+npdes_table_ref = f"{PROJECT_ID}.{DATASET}.npdes"
 weather_table_ref = f"{PROJECT_ID}.{DATASET}.prep_temp_snow"
 
 def save_user_to_firestore(user_info):
     """Save or update user information in Firestore"""
     try:
         users_ref = db.collection('users')
-        user_doc_ref = users_ref.document(user_info['sub'])  # Use Google user ID as document ID
-        
-        # Check if user exists
+        user_doc_ref = users_ref.document(user_info['sub'])
         user_doc = user_doc_ref.get()
         
         if user_doc.exists:
-            # Update existing user
             user_doc_ref.update({
                 'email': user_info['email'],
                 'name': user_info['name'],
@@ -65,7 +52,6 @@ def save_user_to_firestore(user_info):
             })
             print(f"✓ Updated existing user: {user_info['email']}")
         else:
-            # Create new user
             user_doc_ref.set({
                 'email': user_info['email'],
                 'name': user_info['name'],
@@ -78,8 +64,6 @@ def save_user_to_firestore(user_info):
             
     except Exception as e:
         print(f"⚠ Warning: Could not save user to Firestore: {str(e)}")
-        print(f"⚠ User can still use the app, but won't be tracked.")
-        # Don't fail login if Firestore fails
         pass
 
 def create_jwt_token(user_info):
@@ -88,7 +72,7 @@ def create_jwt_token(user_info):
         'email': user_info['email'],
         'name': user_info.get('name', ''),
         'picture': user_info.get('picture', ''),
-        'sub': user_info['sub'],  # Google user ID
+        'sub': user_info['sub'],
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=JWT_EXP_HOURS),
         'iat': datetime.datetime.utcnow()
     }
@@ -114,14 +98,12 @@ def require_auth(f):
             return jsonify({'error': 'No authorization header'}), 401
         
         try:
-            # Expected format: "Bearer <token>"
             token = auth_header.split(' ')[1]
             payload = verify_jwt_token(token)
             
             if not payload:
                 return jsonify({'error': 'Invalid or expired token'}), 401
             
-            # Add user info to request context
             request.user = payload
             return f(*args, **kwargs)
             
@@ -132,20 +114,27 @@ def require_auth(f):
     
     return decorated_function
 
-# ============= AUTH ROUTES =============
-
+# Global after_request handler to ensure CORS headers are always present
 @app.after_request
 def after_request(response):
     origin = request.headers.get('Origin')
-    if origin in [
+    
+    # List of allowed origins
+    allowed_origins = [
         'https://kosh-frontend-react-569071530463.europe-west1.run.app',
         'http://localhost:5173'
-    ]:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
+    ]
+    
+    if origin in allowed_origins:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Max-Age'] = '3600'
+    
     return response
+
+# ============= AUTH ROUTES =============
 
 @app.route("/api/auth/google", methods=["POST", "OPTIONS"])
 def google_auth():
@@ -154,14 +143,9 @@ def google_auth():
     Expects: { "token": "google_id_token" }
     Returns: { "token": "jwt_token", "user": {...} }
     """
-    # Handle preflight OPTIONS request
+    # Handle preflight
     if request.method == "OPTIONS":
-        response = jsonify({"status": "ok"})
-        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-        response.headers.add("Access-Control-Allow-Methods", "POST,OPTIONS")
-        response.headers.add("Access-Control-Allow-Credentials", "true")
-        return response, 200
+        return '', 204
     
     try:
         data = request.get_json()
@@ -182,7 +166,6 @@ def google_auth():
         
         print(f"Token verified successfully for: {idinfo.get('email')}")
         
-        # Extract user information
         user_info = {
             'email': idinfo['email'],
             'name': idinfo.get('name', ''),
@@ -190,22 +173,13 @@ def google_auth():
             'sub': idinfo['sub']
         }
         
-        # Save user to Firestore
         save_user_to_firestore(user_info)
-        
-        # Create our own JWT token
         jwt_token = create_jwt_token(user_info)
         
-        response = jsonify({
+        return jsonify({
             'token': jwt_token,
             'user': user_info
-        })
-        
-        # Explicitly set CORS headers in response
-        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
-        response.headers.add("Access-Control-Allow-Credentials", "true")
-        
-        return response, 200
+        }), 200
         
     except ValueError as e:
         print(f"ValueError in google_auth: {str(e)}")
@@ -216,25 +190,25 @@ def google_auth():
         traceback.print_exc()
         return jsonify({'error': f'Authentication failed: {str(e)}'}), 500
 
-@app.route("/api/auth/verify", methods=["GET"])
+@app.route("/api/auth/verify", methods=["GET", "OPTIONS"])
 @require_auth
 def verify_token():
-    """
-    Verify if current JWT token is valid
-    Returns user info if valid
-    """
+    """Verify if current JWT token is valid"""
+    if request.method == "OPTIONS":
+        return '', 204
+    
     return jsonify({
         'valid': True,
         'user': request.user
     }), 200
 
-@app.route("/api/admin/users", methods=["GET"])
+@app.route("/api/admin/users", methods=["GET", "OPTIONS"])
 @require_auth
 def get_all_users():
-    """
-    Get all users from Firestore
-    (In production, you'd want to add admin-only access control here)
-    """
+    """Get all users from Firestore"""
+    if request.method == "OPTIONS":
+        return '', 204
+    
     try:
         users_ref = db.collection('users')
         users = users_ref.stream()
@@ -242,7 +216,6 @@ def get_all_users():
         user_list = []
         for user in users:
             user_data = user.to_dict()
-            # Convert Firestore timestamps to strings for JSON serialization
             if 'created_at' in user_data and user_data['created_at']:
                 user_data['created_at'] = user_data['created_at'].isoformat()
             if 'last_login' in user_data and user_data['last_login']:
@@ -258,15 +231,15 @@ def get_all_users():
         print(f"Error fetching users: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
-
-@app.route("/api/filters/initial", methods=["GET"])
+@app.route("/api/filters/initial", methods=["GET", "OPTIONS"])
 @require_auth
 def get_initial_filters():
     """
     Get all unique values for dropdowns on initial load
     Combines NPDES and Weather data
     """
+    if request.method == "OPTIONS":
+        return '', 204
     try:
         query = f"""
         SELECT 
@@ -349,13 +322,15 @@ def get_initial_filters():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/filters/cascading", methods=["POST"])
+@app.route("/api/filters/cascading", methods=["POST", "OPTIONS"])
 @require_auth
 def get_cascading_filters():
     """
     Cascading filters that include both NPDES and Weather data
     Weather parameters are always available regardless of outfall/permit selection
     """
+    if request.method == "OPTIONS":
+        return '', 204
     try:
         data = request.get_json()
         permit_number = data.get("permit_number")  # This is now "station_name_npdes_permit_number"
@@ -502,13 +477,15 @@ def get_cascading_filters():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/data/combined", methods=["GET"])
+@app.route("/api/data/combined", methods=["GET", "OPTIONS"])
 @require_auth
 def get_combined_data():
     """
     Fetches data from both NPDES and Weather tables
     Weather data appears regardless of permit/outfall selection
     """
+    if request.method == "OPTIONS":
+        return '', 204
     try:
         params = {
             "permit_number": request.args.get("permit_number"),  # This is now "station_name_npdes_permit_number"
@@ -665,12 +642,14 @@ def get_combined_data():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/data/statistics/combined", methods=["GET"])
+@app.route("/api/data/statistics/combined", methods=["GET", "OPTIONS"])
 @require_auth
 def get_combined_statistics():
     """
     Get statistics for combined NPDES and Weather data
     """
+    if request.method == "OPTIONS":
+        return '', 204
     try:
         params = {
             "permit_number": request.args.get("permit_number"),  # This is now "station_name_npdes_permit_number"
