@@ -137,7 +137,7 @@ def handle_options():
     if request.method == "OPTIONS":
         return "", 204
 
-@app.route("/api/auth/google", methods=["POST"])
+@app.route("/api/auth/google", methods=["POST", "OPTIONS"])
 def google_auth():
     """
     Verify Google OAuth token and return JWT
