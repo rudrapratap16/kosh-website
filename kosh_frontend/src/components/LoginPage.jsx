@@ -3,7 +3,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { LoadingOutlined } from '@ant-design/icons';
 import './LoginPage.css';
 
-BACKEND_URL = 'https://kosh-backend-569071530463.europe-west1.run.app';
+const BACKEND_URL = 'https://kosh-backend-569071530463.europe-west1.run.app';
 // BACKEND_URL = 'http://localhost:8080';
 
 const LoginPage = ({ onLogin }) => {
