@@ -13,7 +13,22 @@ import os
 # Create Flask app at top level
 app = Flask(__name__)
 
-CORS(app, resources={r"/*": {"origins": "https://kosh-frontend-react-569071530463.europe-west1.run.app"}})
+CORS(
+    app,
+    supports_credentials=True,
+    resources={
+        r"/*": {
+            "origins": [
+                "https://kosh-frontend-react-569071530463.europe-west1.run.app",
+                "http://localhost:5173",
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+        }
+    }
+)
+
+# CORS(app, resources={r"/*": {"origins": "https://kosh-frontend-react-569071530463.europe-west1.run.app"}})
 # CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
 
 JWT_SECRET = os.environ.get('JWT_SECRET')
@@ -116,6 +131,11 @@ def require_auth(f):
     return decorated_function
 
 # ============= AUTH ROUTES =============
+
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        return "", 204
 
 @app.route("/api/auth/google", methods=["POST"])
 def google_auth():
