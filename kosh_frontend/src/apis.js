@@ -1,5 +1,4 @@
-const API_BASE = 'https://kosh-backend-569071530463.europe-west1.run.app';
-// const API_BASE = 'http://127.0.0.1:8080';
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
 
 // Helper function to get JWT token from localStorage
 const getAuthHeaders = () => {

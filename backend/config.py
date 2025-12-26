@@ -6,10 +6,10 @@ load_dotenv('.env')
 
 # BigQuery + Backend Configs
 PROJECT_ID = os.getenv("PROJECT_ID", "koshai-475618")
-print(PROJECT_ID)
 DATASET = os.getenv("DATASET", "raw_data")
 TABLE = os.getenv("TABLE", "npdes_monitoring")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", 8080))
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 # CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 # if CREDENTIALS_PATH:

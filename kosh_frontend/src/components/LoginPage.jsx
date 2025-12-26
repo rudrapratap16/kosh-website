@@ -3,8 +3,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { LoadingOutlined } from '@ant-design/icons';
 import './LoginPage.css';
 
-const BACKEND_URL = 'https://kosh-backend-569071530463.europe-west1.run.app';
-// const BACKEND_URL = 'http://localhost:8080';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 const LoginPage = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);

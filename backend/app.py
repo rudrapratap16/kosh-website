@@ -7,7 +7,7 @@ from google.auth.transport import requests as google_requests
 import jwt
 import datetime
 from functools import wraps
-from config import PROJECT_ID, DATASET
+from config import PROJECT_ID, DATASET, FRONTEND_URL
 import os
 
 # Create Flask app at top level
@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 CORS(app, 
      origins=[
-         "https://kosh-frontend-react-569071530463.europe-west1.run.app",
+         FRONTEND_URL,
          "http://localhost:5173",
          "http://127.0.0.1:5173",
          "http://localhost:8080",
