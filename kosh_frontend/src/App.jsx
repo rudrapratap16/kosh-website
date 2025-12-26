@@ -13,9 +13,9 @@ import {
   fetchCombinedData,
   fetchCombinedStatistics
 } from './apis.js';
+import { BACKEND_URL } from './config';
 
 const GOOGLE_CLIENT_ID = '569071530463-tmc25vftuc18maava7vdg1f6v56nk61t.apps.googleusercontent.com'; // Replace with your actual Google Client ID
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

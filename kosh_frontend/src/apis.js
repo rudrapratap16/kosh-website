@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_BACKEND_URL;
+import { BACKEND_URL } from "./config";
+
+const API_BASE = BACKEND_URL;
 
 // Helper function to get JWT token from localStorage
 const getAuthHeaders = () => {

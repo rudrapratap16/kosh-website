@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { LoadingOutlined } from '@ant-design/icons';
 import './LoginPage.css';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+import { BACKEND_URL } from '../config';
 
 const LoginPage = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
