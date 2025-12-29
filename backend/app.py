@@ -4,11 +4,13 @@ from google.cloud import bigquery
 from google.cloud import firestore
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import datetime
 from functools import wraps
 from config import PROJECT_ID, DATASET, FRONTEND_URL
 import os
+import re
 
 # Create Flask app at top level
 app = Flask(__name__)
@@ -40,6 +42,22 @@ client = bigquery.Client(project=PROJECT_ID)
 npdes_table_ref = f"{PROJECT_ID}.{DATASET}.npdes"
 weather_table_ref = f"{PROJECT_ID}.{DATASET}.prep_temp_snow"
 
+# Helper Functions
+def validate_email(email):
+    """Validate email format"""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+def validate_password(password):
+    """Validate password strength (min 8 chars, at least 1 letter and 1 number)"""
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    if not re.search(r'[A-Za-z]', password):
+        return False, "Password must contain at least one letter"
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one number"
+    return True, ""
+
 def save_user_to_firestore(user_info):
     """Save or update user information in Firestore"""
     try:
@@ -50,25 +68,33 @@ def save_user_to_firestore(user_info):
         if user_doc.exists:
             user_doc_ref.update({
                 'email': user_info['email'],
-                'name': user_info['name'],
-                'picture': user_info['picture'],
+                'name': user_info.get('name', ''),
+                'picture': user_info.get('picture', ''),
                 'last_login': firestore.SERVER_TIMESTAMP
             })
             print(f"✓ Updated existing user: {user_info['email']}")
         else:
-            user_doc_ref.set({
+            user_data = {
                 'email': user_info['email'],
-                'name': user_info['name'],
-                'picture': user_info['picture'],
-                'google_id': user_info['sub'],
+                'name': user_info.get('name', ''),
+                'picture': user_info.get('picture', ''),
                 'created_at': firestore.SERVER_TIMESTAMP,
-                'last_login': firestore.SERVER_TIMESTAMP
-            })
+                'last_login': firestore.SERVER_TIMESTAMP,
+                'auth_provider': user_info.get('auth_provider', 'google')
+            }
+            
+            # Add google_id or password_hash based on auth provider
+            if user_info.get('auth_provider') == 'google':
+                user_data['google_id'] = user_info['sub']
+            elif user_info.get('auth_provider') == 'email':
+                user_data['password_hash'] = user_info.get('password_hash')
+            
+            user_doc_ref.set(user_data)
             print(f"✓ Created new user: {user_info['email']}")
             
     except Exception as e:
         print(f"⚠ Warning: Could not save user to Firestore: {str(e)}")
-        pass
+        raise
 
 def create_jwt_token(user_info):
     """Create JWT token with user information"""
@@ -120,6 +146,149 @@ def require_auth(f):
 
 # ============= AUTH ROUTES =============
 
+@app.route("/api/auth/register", methods=["POST"])
+def register():
+    """
+    Register new user with email and password
+    Expects: { "email": "user@example.com", "password": "password123", "name": "User Name" }
+    Returns: { "token": "jwt_token", "user": {...} }
+    """
+    if request.method == "OPTIONS":
+        return '', 204
+    
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        name = data.get('name', '').strip()
+        
+        # Validate inputs
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+        
+        if not validate_email(email):
+            return jsonify({'error': 'Invalid email format'}), 400
+        
+        is_valid, error_msg = validate_password(password)
+        if not is_valid:
+            return jsonify({'error': error_msg}), 400
+        
+        # Check if user already exists
+        users_ref = db.collection('users')
+        existing_users = users_ref.where('email', '==', email).limit(1).stream()
+        
+        if list(existing_users):
+            return jsonify({'error': 'User with this email already exists'}), 409
+        
+        # Create password hash
+        password_hash = generate_password_hash(password)
+        
+        # Generate unique user ID
+        user_id = email.replace('@', '_at_').replace('.', '_')
+        
+        # Create user info
+        user_info = {
+            'email': email,
+            'name': name or email.split('@')[0],
+            'picture': '',
+            'sub': user_id,
+            'password_hash': password_hash,
+            'auth_provider': 'email'
+        }
+        
+        # Save to Firestore
+        save_user_to_firestore(user_info)
+        
+        # Create JWT token
+        jwt_token = create_jwt_token(user_info)
+        
+        # Remove password_hash from response
+        response_user = {
+            'email': user_info['email'],
+            'name': user_info['name'],
+            'picture': user_info['picture'],
+            'sub': user_info['sub']
+        }
+        
+        return jsonify({
+            'token': jwt_token,
+            'user': response_user
+        }), 201
+        
+    except Exception as e:
+        print(f"Exception in register: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Registration failed: {str(e)}'}), 500
+
+@app.route("/api/auth/login", methods=["POST"])
+def login():
+    """
+    Login with email and password
+    Expects: { "email": "user@example.com", "password": "password123" }
+    Returns: { "token": "jwt_token", "user": {...} }
+    """
+    if request.method == "OPTIONS":
+        return '', 204
+    
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        
+        # Validate inputs
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+        
+        # Find user in Firestore
+        users_ref = db.collection('users')
+        user_query = users_ref.where('email', '==', email).limit(1).stream()
+        
+        user_doc = None
+        for doc in user_query:
+            user_doc = doc
+            break
+        
+        if not user_doc:
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        user_data = user_doc.to_dict()
+        
+        # Check if user registered with email/password
+        if user_data.get('auth_provider') != 'email':
+            return jsonify({'error': 'This account uses Google login. Please sign in with Google.'}), 401
+        
+        # Verify password
+        if not check_password_hash(user_data.get('password_hash', ''), password):
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        # Update last login
+        user_doc.reference.update({
+            'last_login': firestore.SERVER_TIMESTAMP
+        })
+        
+        # Create user info for JWT
+        user_info = {
+            'email': user_data['email'],
+            'name': user_data.get('name', ''),
+            'picture': user_data.get('picture', ''),
+            'sub': user_doc.id
+        }
+        
+        # Create JWT token
+        jwt_token = create_jwt_token(user_info)
+        
+        return jsonify({
+            'token': jwt_token,
+            'user': user_info
+        }), 200
+        
+    except Exception as e:
+        print(f"Exception in login: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Login failed: {str(e)}'}), 500
+
 @app.route("/api/auth/google", methods=["POST"])
 def google_auth():
     """
@@ -127,7 +296,6 @@ def google_auth():
     Expects: { "token": "google_id_token" }
     Returns: { "token": "jwt_token", "user": {...} }
     """
-    # Handle preflight
     if request.method == "OPTIONS":
         return '', 204
     
@@ -154,7 +322,8 @@ def google_auth():
             'email': idinfo['email'],
             'name': idinfo.get('name', ''),
             'picture': idinfo.get('picture', ''),
-            'sub': idinfo['sub']
+            'sub': idinfo['sub'],
+            'auth_provider': 'google'
         }
         
         save_user_to_firestore(user_info)
@@ -162,7 +331,12 @@ def google_auth():
         
         return jsonify({
             'token': jwt_token,
-            'user': user_info
+            'user': {
+                'email': user_info['email'],
+                'name': user_info['name'],
+                'picture': user_info['picture'],
+                'sub': user_info['sub']
+            }
         }), 200
         
     except ValueError as e:
@@ -200,6 +374,8 @@ def get_all_users():
         user_list = []
         for user in users:
             user_data = user.to_dict()
+            # Remove sensitive data
+            user_data.pop('password_hash', None)
             if 'created_at' in user_data and user_data['created_at']:
                 user_data['created_at'] = user_data['created_at'].isoformat()
             if 'last_login' in user_data and user_data['last_login']:
@@ -215,19 +391,17 @@ def get_all_users():
         print(f"Error fetching users: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# ============= DATA ROUTES (keeping your existing ones) =============
+
 @app.route("/api/filters/initial", methods=["GET"])
 @require_auth
 def get_initial_filters():
-    """
-    Get all unique values for dropdowns on initial load
-    Combines NPDES and Weather data
-    """
+    """Get all unique values for dropdowns on initial load"""
     if request.method == "OPTIONS":
         return '', 204
     try:
         query = f"""
         SELECT 
-            -- Station Names from NPDES only (combined with permit number)
             (SELECT ARRAY_AGG(combined_name ORDER BY combined_name) 
              FROM (
                 SELECT DISTINCT CONCAT(station_name, '_', npdes_permit_number) as combined_name
@@ -235,7 +409,6 @@ def get_initial_filters():
                 WHERE station_name IS NOT NULL AND npdes_permit_number IS NOT NULL
              )) as permit_numbers,
             
-            -- Outfalls from NPDES only
             (SELECT ARRAY_AGG(outfall ORDER BY outfall) 
              FROM (
                 SELECT DISTINCT outfall_number as outfall
@@ -243,7 +416,6 @@ def get_initial_filters():
                 WHERE outfall_number IS NOT NULL
              )) as outfalls,
             
-            -- Parameters from both tables
             (SELECT ARRAY_AGG(param ORDER BY param)
              FROM (
                 SELECT DISTINCT parameter_description as param
@@ -255,7 +427,6 @@ def get_initial_filters():
                 WHERE parameter_description IS NOT NULL
              )) as parameters,
             
-            -- Bases from both tables
             (SELECT ARRAY_AGG(base_val ORDER BY base_val)
              FROM (
                 SELECT DISTINCT statistical_base as base_val
@@ -267,7 +438,6 @@ def get_initial_filters():
                 WHERE statistical_base IS NOT NULL
              )) as bases,
             
-            -- Units from both tables
             (SELECT ARRAY_AGG(unit_val ORDER BY unit_val)
              FROM (
                 SELECT DISTINCT dmr_value_unit as unit_val
