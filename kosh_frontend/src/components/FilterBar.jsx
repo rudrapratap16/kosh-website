@@ -416,7 +416,7 @@ const FilterBar = ({ filters, options, onFilterChange, onDateChange, onApply, lo
             onChange={(value) => onFilterChange('permit_number', value)}
             placeholder="Select Station"
             darkMode={darkMode}
-            label="Station Name"
+            label="Facility"
             displayFormatter={(value) => value.replace('_', ' - ')}
           />
 
